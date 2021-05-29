@@ -25,10 +25,10 @@ class ExistsConsumer {
             if (err) {
                 console.error(err);
             } else {
-                console.info(res);
+                console.info(res === 1 ? "Exists" : "Does not exist");
             }
 
-            const elapsed = performance.now() - startTime;
+            const elapsed = Math.round(performance.now() - startTime);
             console.info(`Elapsed: ${elapsed} ms`);
             setTimeout(this.checkIfExistsCallback, Math.max(0, 1000 - elapsed));
         });

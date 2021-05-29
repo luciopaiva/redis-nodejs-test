@@ -37,9 +37,9 @@ class Producer {
             batch.setex(i, EXPIRATION_TIME_IN_SECONDS, this.buffer);
         }
         batch.exec();
-        console.info("Batch dispatched");
 
-        const elapsed = performance.now() - startTime;
+        const elapsed = Math.round(performance.now() - startTime);
+        console.info(`Batch dispatched (took ${elapsed} ms)`);
         setTimeout(this.sendBatchCallback, Math.max(0, 1000 - elapsed));
     }
 }
