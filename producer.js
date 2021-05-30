@@ -1,5 +1,5 @@
 
-const redis = require("redis");
+const Redis = require("ioredis");
 const clientConfig = require("./config.json");
 
 const EXPIRATION_TIME_IN_SECONDS = 3;
@@ -23,7 +23,7 @@ class Producer {
 
         this.sendBatchCallback = this.sendBatch.bind(this);
 
-        this.client = redis.createClient(clientConfig);
+        this.client = new Redis(clientConfig);
         this.client.on("error", error => console.error(error));
         this.client.on("connect", () => console.info("Connected"));
         this.client.on("ready", this.start.bind(this));
@@ -38,14 +38,14 @@ class Producer {
         console.info("Starting batch...");
         const startTime = performance.now();
 
-        const batch = this.client.batch();
+        const batch = this.client.pipeline();
         for (let i = this.minId; i <= this.maxId; i++) {
             batch.setex(i, EXPIRATION_TIME_IN_SECONDS, this.buffer);
         }
         batch.exec();
 
         const elapsed = Math.round(performance.now() - startTime);
-        console.info(`Batch dispatched (took ${elapsed} ms) (pipeline queue: ${this.client.pipeline_queue.length})`);
+        console.info(`Batch dispatched (took ${elapsed} ms)`);
         setTimeout(this.sendBatchCallback, Math.max(0, this.periodInMillis - elapsed));
     }
 }
