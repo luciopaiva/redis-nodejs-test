@@ -1,5 +1,6 @@
 
 const redis = require("redis");
+const clientConfig = require("./client-config.json");
 
 const EXPIRATION_TIME_IN_SECONDS = 3;
 
@@ -17,7 +18,7 @@ class Producer {
 
         this.sendBatchCallback = this.sendBatch.bind(this);
 
-        this.client = redis.createClient();
+        this.client = redis.createClient(clientConfig);
         this.client.on("error", error => console.error(error));
         this.client.on("connect", () => console.info("Connected"));
         this.client.on("ready", this.start.bind(this));

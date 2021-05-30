@@ -1,5 +1,6 @@
 
 const redis = require("redis");
+const clientConfig = require("./client-config.json");
 
 class ExistsConsumer {
     client;
@@ -7,7 +8,7 @@ class ExistsConsumer {
     constructor() {
         this.checkIfExistsCallback = this.checkIfExists.bind(this);
 
-        this.client = redis.createClient();
+        this.client = redis.createClient(clientConfig);
         this.client.on("error", error => console.error(error));
         this.client.on("connect", () => console.info("Connected"));
         this.client.on("ready", this.start.bind(this));

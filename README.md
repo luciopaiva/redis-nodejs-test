@@ -20,6 +20,8 @@ It will start the server in memory-only mode (RDB and AOF are disabled, so no wr
     nvm install
     npm install
 
+Create a file named `client-config.json` with options to be directly passed to the `redis` module. Create a file with an empty object (`{}`) if you'd like to keep all the default settings.
+
 ## Run experiment
 
 See producer, exists-consumer, publisher, subscriber and other scripts for examples.
