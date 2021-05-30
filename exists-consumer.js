@@ -1,6 +1,6 @@
 
 const redis = require("redis");
-const clientConfig = require("./client-config.json");
+const clientConfig = require("./config.json");
 
 class ExistsConsumer {
     client;

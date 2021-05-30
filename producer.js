@@ -1,6 +1,6 @@
 
 const redis = require("redis");
-const clientConfig = require("./client-config.json");
+const clientConfig = require("./config.json");
 
 const EXPIRATION_TIME_IN_SECONDS = 3;
 
@@ -8,9 +8,14 @@ class Producer {
     buffer;
     minId = 1;
     maxId = 100;
+    periodInMillis = 1000;
     client;
 
-    constructor() {
+    constructor(minId = this.minId, maxId = this.maxId, periodInMillis = this.periodInMillis) {
+        this.minId = minId;
+        this.maxId = maxId;
+        this.periodInMillis = periodInMillis;
+
         this.buffer = Buffer.allocUnsafe(128);
         for (let i = 0; i < this.buffer.length; i++) {
             this.buffer[i] = i;
@@ -41,8 +46,8 @@ class Producer {
 
         const elapsed = Math.round(performance.now() - startTime);
         console.info(`Batch dispatched (took ${elapsed} ms)`);
-        setTimeout(this.sendBatchCallback, Math.max(0, 1000 - elapsed));
+        setTimeout(this.sendBatchCallback, Math.max(0, this.periodInMillis - elapsed));
     }
 }
 
-new Producer();
+new Producer(...process.argv.slice(2));
