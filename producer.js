@@ -45,7 +45,7 @@ class Producer {
         batch.exec();
 
         const elapsed = Math.round(performance.now() - startTime);
-        console.info(`Batch dispatched (took ${elapsed} ms)`);
+        console.info(`Batch dispatched (took ${elapsed} ms) (pipeline queue: ${this.client.pipeline_queue.length})`);
         setTimeout(this.sendBatchCallback, Math.max(0, this.periodInMillis - elapsed));
     }
 }
