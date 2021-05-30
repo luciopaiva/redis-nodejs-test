@@ -42,11 +42,15 @@ class Producer {
         for (let i = this.minId; i <= this.maxId; i++) {
             batch.setex(i, EXPIRATION_TIME_IN_SECONDS, this.buffer);
         }
-        batch.exec();
+        batch.exec(err => {
+            if (err) {
+                console.error(err);
+            }
 
-        const elapsed = Math.round(performance.now() - startTime);
-        console.info(`Batch dispatched (took ${elapsed} ms)`);
-        setTimeout(this.sendBatchCallback, Math.max(0, this.periodInMillis - elapsed));
+            const elapsed = Math.round(performance.now() - startTime);
+            console.info(`Batch dispatched (took ${elapsed} ms)`);
+            setTimeout(this.sendBatchCallback, Math.max(0, this.periodInMillis - elapsed));
+        });
     }
 }
 
