@@ -3,9 +3,12 @@ const redis = require("redis");
 const clientConfig = require("./config.json");
 
 class ExistsConsumer {
+    id = 50;
     client;
 
-    constructor() {
+    constructor(id = this.id) {
+        this.id = id;
+
         this.checkIfExistsCallback = this.checkIfExists.bind(this);
 
         this.client = redis.createClient(clientConfig);
@@ -22,7 +25,7 @@ class ExistsConsumer {
     checkIfExists() {
         const startTime = performance.now();
 
-        this.client.exists(50, (err, res) => {
+        this.client.exists(this.id, (err, res) => {
             if (err) {
                 console.error(err);
             } else {
@@ -36,4 +39,4 @@ class ExistsConsumer {
     }
 }
 
-new ExistsConsumer();
+new ExistsConsumer(...process.argv.slice(2));
