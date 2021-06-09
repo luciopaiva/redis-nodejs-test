@@ -1,5 +1,6 @@
 
 const RedisClientFactory = require("./redis-client-factory");
+const utils = require("./utils");
 
 const EXPIRATION_TIME_IN_SECONDS = 3;
 
@@ -15,10 +16,7 @@ class Producer {
         this.maxId = maxId;
         this.periodInMillis = periodInMillis;
 
-        this.buffer = Buffer.allocUnsafe(128);
-        for (let i = 0; i < this.buffer.length; i++) {
-            this.buffer[i] = i;
-        }
+        this.buffer = utils.obtainDummyPayload(128);
 
         this.sendBatchCallback = this.sendBatch.bind(this);
 
