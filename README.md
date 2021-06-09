@@ -1,11 +1,11 @@
 
-# Redis Node.js test
+# Redis Node.js experiments
 
-Simple scripts to experiment with Redis via Node.js clients.
+Some experiments to understand how Redis works.
 
-## Setup redis server
+## Setup local Redis server
 
-Install redis locally:
+In case you have a remote Redis server ready, just skip this step. To install redis locally:
 
     brew install redis
 
@@ -15,7 +15,7 @@ Start the redis server using the conf file in this repo:
 
 It will start the server in memory-only mode (RDB and AOF are disabled, so no writes to disk, nothing is persisted).
 
-## Setup experiment
+## Setup local environment
 
     nvm install
     npm install
