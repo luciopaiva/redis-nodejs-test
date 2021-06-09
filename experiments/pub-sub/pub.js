@@ -6,18 +6,33 @@ class Pub {
     client;
     runCallback;
     id = 1;
+    static totalChannels = 2000;
 
     constructor() {
         this.runCallback = this.run.bind(this);
         this.client = RedisClientFactory.startClient(this.runCallback);
     }
 
-    run() {
-        this.client.publish("channel-123", this.id);
-        console.info(`Published message ${this.id}.`);
+    async run() {
+        const startTime = performance.now();
+
+        const batch = this.client.pipeline();
+        for (let i = 0; i < Pub.totalChannels; i++) {
+            batch.publish("channel-" + i, this.id);
+        }
+        await batch.exec();
+
         this.id++;
+
+        const elapsed = Math.round(performance.now() - startTime);
+        console.info(`Batch dispatched (took ${elapsed} ms)`);
+
         setTimeout(this.runCallback, 1000);
     }
 }
 
-new Pub();
+if (require.main === module) {
+    new Pub();
+} else {
+    module.exports = Pub;
+}
