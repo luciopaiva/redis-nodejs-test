@@ -1,6 +1,5 @@
 
-const Redis = require("ioredis");
-const clientConfig = require("./config.json");
+const RedisClientFactory = require("./redis-client-factory");
 
 const EXPIRATION_TIME_IN_SECONDS = 3;
 
@@ -23,15 +22,7 @@ class Producer {
 
         this.sendBatchCallback = this.sendBatch.bind(this);
 
-        this.client = new Redis(clientConfig);
-        this.client.on("error", error => console.error(error));
-        this.client.on("connect", () => console.info("Connected"));
-        this.client.on("ready", this.start.bind(this));
-    }
-
-    start() {
-        console.info("Connection ready. Starting job...");
-        this.sendBatch();
+        this.client = RedisClientFactory.startClient(this.sendBatch.bind(this));
     }
 
     sendBatch() {

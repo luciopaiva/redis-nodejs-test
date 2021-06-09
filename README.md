@@ -22,6 +22,22 @@ It will start the server in memory-only mode (RDB and AOF are disabled, so no wr
 
 Create a file named `config.json` with options to be directly passed to the `redis` module. Create a file with an empty object (`{}`) if you'd like to keep all the default settings.
 
+## ElastiCache Redis server
+
+If you are running an ElastiCache Redis server, here are some things to have in mind.
+
+When running in cluster mode, you may see the following message:
+
+    ReplyError: MOVED 3123 <ip-address>:6379
+    at parseError (/Users/lucio/projects/redis-nodejs-test/node_modules/redis-parser/lib/parser.js:179:12)
+    at parseType (/Users/lucio/projects/redis-nodejs-test/node_modules/redis-parser/lib/parser.js:302:14) {
+    command: { name: 'exists', args: [ '50' ] }
+    }
+
+It means the Redis server node you are directly connected to is signaling you should connect to another node. For `ioredis` (the underlying library used by this project to connect to Redis) to work in cluster mode, see [this](https://stackoverflow.com/a/64871857/778272).
+
+Alternatively, you can also connect directly to that node by referencing the IP address in the config.json file.
+
 ## Run experiment
 
 See `producer.js` and `exists-consumer.js`. The producer will set Redis keys containing a payload of 128 bytes each. The consumer will check if a given key exists and just return true or false.

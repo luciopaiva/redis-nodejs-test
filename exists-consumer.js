@@ -1,6 +1,5 @@
 
-const redis = require("redis");
-const clientConfig = require("./config.json");
+const RedisClientFactory = require("./redis-client-factory");
 
 class ExistsConsumer {
     id = 50;
@@ -11,15 +10,7 @@ class ExistsConsumer {
 
         this.checkIfExistsCallback = this.checkIfExists.bind(this);
 
-        this.client = redis.createClient(clientConfig);
-        this.client.on("error", error => console.error(error));
-        this.client.on("connect", () => console.info("Connected"));
-        this.client.on("ready", this.start.bind(this));
-    }
-
-    start() {
-        console.info("Connection ready. Starting job...");
-        this.checkIfExists();
+        this.client = RedisClientFactory.startClient(this.checkIfExists.bind(this));
     }
 
     checkIfExists() {
