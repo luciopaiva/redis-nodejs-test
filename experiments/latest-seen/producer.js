@@ -9,6 +9,7 @@ class Producer {
     client;
     runCallback = this.run.bind(this);
     currentId = 0;
+    nextTimeShouldCleanExpired = 0;
 
     constructor() {
         this.client = RedisClientFactory.startClient(this.runCallback);
@@ -24,8 +25,12 @@ class Producer {
 
         const batch = this.client.pipeline();
 
-        // remove expired elements
-        batch.zremrangebyscore("latest-ids", "-inf", now - 3000);
+        if (this.nextTimeShouldCleanExpired < now) {
+            // remove expired elements
+            batch.zremrangebyscore("latest-ids", "-inf", now - 3000);
+            this.nextTimeShouldCleanExpired = now + 6_000;
+        }
+
         // update elements that have changed during the last second
         batch.zadd("latest-ids", ...timestampsAndIds);
         await batch.exec();
