@@ -36,10 +36,11 @@ class Producer {
 
         // update elements that have changed during the last second
         for (let i = this.currentId; i < this.currentId + LATEST_COUNT; i++) {
-            timestampsAndIds.push(now);
-            timestampsAndIds.push(i);
-
             const key = this.hashKeys.get(i);
+
+            timestampsAndIds.push(now);
+            timestampsAndIds.push(key);
+
             batch.hmset(key, this.hashValues.get(i));
             batch.expire(key, 3);
         }
