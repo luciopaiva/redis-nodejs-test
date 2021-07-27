@@ -16,7 +16,7 @@ class Producer {
         this.maxId = maxId;
         this.periodInMillis = periodInMillis;
 
-        this.buffer = utils.obtainDummyPayload(128);
+        this.buffer = utils.obtainDummyPayload(0, 128);
 
         this.sendBatchCallback = this.sendBatch.bind(this);
 

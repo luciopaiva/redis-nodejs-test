@@ -1,7 +1,8 @@
 
-function obtainDummyPayload(sizeInBytes) {
+function obtainDummyPayload(id, sizeInBytes) {
     const buffer = Buffer.allocUnsafe(sizeInBytes);
-    for (let i = 0; i < buffer.length; i++) {
+    buffer.writeUInt32BE(id, 0);
+    for (let i = 4; i < buffer.length - 4; i++) {
         buffer[i] = i;
     }
     return buffer;

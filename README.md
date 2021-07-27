@@ -22,7 +22,7 @@ It will start the server in memory-only mode (RDB and AOF are disabled, so no wr
 
 Create a file named `config.json` with options to be directly passed to the `redis` module. Create a file with an empty object (`{}`) if you'd like to keep all the default settings.
 
-## Run experiment
+## Simple experiment
 
 See `producer.js` and `exists-consumer.js`. The producer will set Redis keys containing a payload of 128 bytes each. The consumer will check if a given key exists and just return true or false.
 
@@ -37,6 +37,10 @@ For example, a test on AWS with 1 c5.xlarge machine client producing 200k items 
 First I tried an m3 type, but it ended up being slower than a t2. Since the m type didn't do it, I decided to experiment with the r6, the latest r type (btw, picking the latest generation does not imply more expensive machines; usually it's quite the contrary and you'll probably pay more for a r4). I chose the r6g.large, which worked very well of that same load and did not see the drop anymore.
 
 On the comment I made above about a new batch only being allowed to start after the response of the current one was received, I did that because the Node.js process was crashing with OOM exceptions. I tried two npm packages, `redis` and `ioredis` and both suffered of the same problem. I believe it is possible to pipeline more commands to Redis still using a single Node.js process, but that problem would need to be solved.
+
+## Other experiments
+
+See the experiments folder for other kinds of interactions with Redis.
 
 ## ElastiCache Redis server
 
