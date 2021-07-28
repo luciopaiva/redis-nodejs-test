@@ -10,11 +10,14 @@ class Producer {
     nextTimeShouldCleanExpired = 0;
     itemKeys = new Map();
     itemValues = new Map();
+    minId = 1;
+    maxId = 100;
+    periodInMillis = settings.DEFAULT_PRODUCER_PERIOD_IN_MILLIS;
 
-    constructor(minId, maxId, periodInMillis) {
-        this.minId = minId ?? 1;
-        this.maxId = maxId ?? 100;
-        this.periodInMillis = periodInMillis ?? settings.DEFAULT_PRODUCER_PERIOD_IN_MILLIS;
+    constructor(minId = this.minId, maxId = this.maxId, periodInMillis = this.periodInMillis) {
+        this.minId = Number(minId);
+        this.maxId = Number(maxId);
+        this.periodInMillis = Number(periodInMillis);
 
         this.client = RedisClientFactory.startClient(this.runCallback);
         for (let i = this.minId; i <= this.maxId; i++) {

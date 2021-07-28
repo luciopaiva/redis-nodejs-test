@@ -12,9 +12,9 @@ class Producer {
     client;
 
     constructor(minId = this.minId, maxId = this.maxId, periodInMillis = this.periodInMillis) {
-        this.minId = minId;
-        this.maxId = maxId;
-        this.periodInMillis = periodInMillis;
+        this.minId = Number(minId);
+        this.maxId = Number(maxId);
+        this.periodInMillis = Number(periodInMillis);
 
         this.buffer = utils.obtainDummyPayload(0, 128);
 
