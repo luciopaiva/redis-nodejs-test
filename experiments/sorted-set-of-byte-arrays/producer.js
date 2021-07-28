@@ -27,7 +27,7 @@ class Producer {
     }
 
     async run() {
-        const startTime = performance.now();
+        const processingStart = performance.now();
         const now = Date.now();
 
         const batch = this.client.pipeline();
@@ -44,8 +44,13 @@ class Producer {
             await this.updateKeysAndSortedSetWithRefToValue(now, batch);
         }
 
-        const elapsed = Math.round(performance.now() - startTime);
-        console.info(`Batch dispatched (took ${elapsed} ms)`);
+        const processingTime = Math.round(performance.now() - processingStart);
+
+        const networkingStart = performance.now();
+        await batch.exec();
+        const networkingTime = Math.round(performance.now() - networkingStart);
+
+        console.info(`Processing: ${processingTime} ms - Networking: ${networkingTime} ms`);
 
         setTimeout(this.runCallback, this.periodInMillis);
     }
@@ -62,7 +67,6 @@ class Producer {
             batch.setex(key, settings.EXPIRATION_TIME_IN_SECONDS, this.itemValues.get(i));
         }
         batch.zadd("latest-ids", ...timestampsAndIds);
-        await batch.exec();
     }
 
     async updateKeysAndSortedSetWithActualValue(now, batch) {
@@ -73,7 +77,6 @@ class Producer {
             timestampsAndIds.push(this.itemValues.get(i));
         }
         batch.zadd("latest-ids", ...timestampsAndIds);
-        await batch.exec();
     }
 }
 
