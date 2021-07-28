@@ -50,7 +50,8 @@ class Producer {
         await batch.exec();
         const networkingTime = Math.round(performance.now() - networkingStart);
 
-        console.info(`Processing: ${processingTime} ms - Networking: ${networkingTime} ms`);
+        const totalTime = processingTime + networkingTime;
+        console.info(`Processing: ${processingTime} ms - Networking: ${networkingTime} ms - Total: ${totalTime} ms`);
 
         setTimeout(this.runCallback, this.periodInMillis);
     }
