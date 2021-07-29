@@ -68,6 +68,7 @@ class Producer {
             batch.setex(key, settings.EXPIRATION_TIME_IN_SECONDS, this.itemValues.get(i));
         }
         batch.zadd("latest-ids", ...timestampsAndIds);
+        batch.zadd("latest-ids-2", ...timestampsAndIds);
     }
 
     async updateKeysAndSortedSetWithActualValue(now, batch) {
