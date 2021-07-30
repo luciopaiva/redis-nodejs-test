@@ -181,6 +181,7 @@ const argv = minimist(process.argv.slice(2), {
         totalAgents: ["t"],
         storeActualValue: ["actual-value"],
         shouldWriteUsingScript: ["ws"],
+        chunkCount: ["c"],
     }
 });
 
