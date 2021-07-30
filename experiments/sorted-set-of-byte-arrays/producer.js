@@ -17,8 +17,9 @@ class Producer {
     chunkCount = 1;
     currentChunk = 0;
     chunks = [];
+    storeActualValue;
 
-    constructor({quantity, periodInMillis, chunkCount, agent, totalAgents}) {
+    constructor({quantity, periodInMillis, chunkCount, agent, totalAgents, storeActualValue}) {
         if (agent < 1 || agent > totalAgents) {
             console.error("Error: agent must be greater than zero and not greater than totalAgents!");
             process.exit(1);
@@ -37,6 +38,8 @@ class Producer {
         }
 
         this.chunkPeriodInMillis = periodInMillis / this.chunks.length;
+
+        this.storeActualValue = storeActualValue;
 
         this.client = RedisClientFactory.startClient(this.runCallback);
         for (let i = this.minId; i <= this.maxId; i++) {
@@ -57,7 +60,7 @@ class Producer {
             this.nextTimeShouldCleanExpired = now + settings.PURGE_PERIOD_IN_MILLIS;
         }
 
-        if (settings.SORTED_SET_CONTAINS_ACTUAL_VALUE) {
+        if (this.storeActualValue) {
             await this.updateKeysAndSortedSetWithActualValue(now, batch);
         } else {
             await this.updateKeysAndSortedSetWithRefToValue(now, batch);
@@ -122,12 +125,15 @@ const argv = minimist(process.argv.slice(2), {
         agent: 1,
         // how many concurrent agents will run
         totalAgents: 1,
+        // whether the sorted set should store the actual value instead of a reference to the value
+        storeActualValue: settings.SORTED_SET_CONTAINS_ACTUAL_VALUE,
     },
     alias: {
         quantity: ["q"],
         periodInMillis: ["p"],
         agent: ["a"],
         totalAgents: ["t"],
+        storeActualValue: ["--actual-value"],
     }
 });
 
