@@ -1,4 +1,6 @@
 
+const fs = require("fs");
+const path = require("path");
 const minimist = require("minimist");
 const RedisClientFactory = require("../../redis-client-factory");
 const utils = require("../../utils");
@@ -18,8 +20,9 @@ class Producer {
     currentChunk = 0;
     chunks = [];
     storeActualValue;
+    shouldWriteUsingScript = false;
 
-    constructor({quantity, periodInMillis, chunkCount, agent, totalAgents, storeActualValue}) {
+    constructor({quantity, periodInMillis, chunkCount, agent, totalAgents, storeActualValue, shouldWriteUsingScript}) {
         if (agent < 1 || agent > totalAgents) {
             console.error("Error: agent must be greater than zero and not greater than totalAgents!");
             process.exit(1);
@@ -40,15 +43,28 @@ class Producer {
         this.chunkPeriodInMillis = periodInMillis / this.chunks.length;
 
         this.storeActualValue = storeActualValue;
+        this.shouldWriteUsingScript = shouldWriteUsingScript;
 
         this.client = RedisClientFactory.startClient(this.runCallback);
+
         for (let i = this.minId; i <= this.maxId; i++) {
             this.itemKeys.set(i, `item:${i}`);
             this.itemValues.set(i, utils.obtainDummyPayload(i, 128));
         }
+
+        if (this.shouldWriteUsingScript) {
+            this.client.defineCommand("storeItems", {
+                lua: fs.readFileSync(path.join(__dirname, "store-items.lua"), "utf-8"),
+            });
+        }
     }
 
     async run() {
+        await this.doRun();
+        setTimeout(this.runCallback, this.chunkPeriodInMillis);
+    }
+
+    async doRun() {
         const processingStart = performance.now();
         const now = Date.now();
 
@@ -60,7 +76,9 @@ class Producer {
             this.nextTimeShouldCleanExpired = now + settings.PURGE_PERIOD_IN_MILLIS;
         }
 
-        if (this.storeActualValue) {
+        if (this.shouldWriteUsingScript) {
+            await this.updateKeysAndSortedSetUsingScript(now, batch);
+        } else if (this.storeActualValue) {
             await this.updateKeysAndSortedSetWithActualValue(now, batch);
         } else {
             await this.updateKeysAndSortedSetWithRefToValue(now, batch);
@@ -75,8 +93,6 @@ class Producer {
         const totalTime = processingTime + networkingTime;
         console.info(`Processing items [${this.minId}, ${this.maxId}]: ` +
             `${processingTime} ms - Networking: ${networkingTime} ms - Total: ${totalTime} ms`);
-
-        setTimeout(this.runCallback, this.chunkPeriodInMillis);
     }
 
     async updateKeysAndSortedSetWithRefToValue(now, batch) {
@@ -95,16 +111,30 @@ class Producer {
         batch.zadd("latest-ids", ...timestampsAndIds);
     }
 
+    async updateKeysAndSortedSetUsingScript(now, batch) {
+        this.setAndUpdateChunk();
+
+        const keys = [];
+        const values = [];
+
+        for (let i = this.minId; i <= this.maxId; i++) {
+            keys.push(this.itemKeys.get(i));
+            values.push(this.itemValues.get(i));
+        }
+
+        batch.storeItems(keys.length, ...keys, now, ...values);
+    }
+
     async updateKeysAndSortedSetWithActualValue(now, batch) {
-        const timestampsAndIds = [];
+        const timestampsAndValues = [];
 
         this.setAndUpdateChunk();
 
         for (let i = this.minId; i <= this.maxId; i++) {
-            timestampsAndIds.push(now);
-            timestampsAndIds.push(this.itemValues.get(i));
+            timestampsAndValues.push(now);
+            timestampsAndValues.push(this.itemValues.get(i));
         }
-        batch.zadd("latest-ids", ...timestampsAndIds);
+        batch.zadd("latest-ids", ...timestampsAndValues);
     }
 
     setAndUpdateChunk() {
@@ -127,13 +157,16 @@ const argv = minimist(process.argv.slice(2), {
         totalAgents: 1,
         // whether the sorted set should store the actual value instead of a reference to the value
         storeActualValue: settings.SORTED_SET_CONTAINS_ACTUAL_VALUE,
+        // whether a Lua script should be used to write keys and sorted set
+        shouldWriteUsingScript: false,
     },
     alias: {
         quantity: ["q"],
         periodInMillis: ["p"],
         agent: ["a"],
         totalAgents: ["t"],
-        storeActualValue: ["--actual-value"],
+        storeActualValue: ["actual-value"],
+        shouldWriteUsingScript: ["ws"],
     }
 });
 
