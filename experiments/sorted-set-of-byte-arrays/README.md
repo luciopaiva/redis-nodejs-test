@@ -173,15 +173,38 @@ By default, the producer writes both the item keys and updates the sorted set wi
 
 ```
 Instance type | Actual value? | Writers | Items per sec each | master CPU | replica CPU
+r6g.large     | Yes           | 6       | 50k                | 33         | 20
 r5.large      | Yes           | 6       | 50k                | 26         | 20
 r5.large      | No            | 6       | 50k                | 43         | 31 
 ```
 
 ## Sending keys only once, but running them through a Lua script
 
-TODO
-
 The idea here is a variation in the test above (references vs actual values). Instead of just having the sorted set with the actual values, we have a Lua script that receives the values and then populates the sorted set AND creates the individual keys. This test answers the following question: what increases the cost when having a sorted set + individual keys? Is it the multiple Redis commands or is it the increased network traffic?
+
+The first results:
+
+```
+Instance type | Writers | Chunks | Items per sec each | master CPU | replica CPU
+r6g.large     | 4       | 1      | 2.5k               | 19         | 3.5
+r6g.large     | 4       | 1      | 5k                 | 48         | 4
+```
+
+These first tests showed that running the Lua script is a very heavy operation. I tried the first test with each instance writing 50k, but the Elasticache Redis simply stopped responding for a couple of minutes! Not even `redis-cli --stat` clients were getting a response.
+
+Trying 5k items per instance got me close to the bottleneck already. Then I tried splitting the load into two separate transmissions in the same 1-second window and there was an improvement:
+
+```
+Instance type | Writers | Chunks | Items per sec each | master CPU | replica CPU
+r6g.large     | 4       | 1      | 5k                 | 48         | 4
+r6g.large     | 4       | 2      | 5k                 | 34.5       | 6
+```
+
+Considering that splitting the batch in the regular test didn't produce any improvements (see the test a few sections above), this is showing that the batch size does cause problems in the Lua script execution.
+
+To understand what exactly may be causing this, I edited the Lua script to basically do nothing. The Redis calls were commented out.
+
+TODO
 
 ## Lua script vs manually running commands
 

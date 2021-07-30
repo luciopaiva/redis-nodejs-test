@@ -23,8 +23,8 @@ for i = 1, count do
     local key = ARGV[i + 1]
     local value = ARGV[i + count + 1]
 
-    redis.call("setex", key, 3, value)
-    redis.call("zadd", "latest-ids", nowInMillis, value)
+    --redis.call("setex", key, 3, value)
+    --redis.call("zadd", "latest-ids", nowInMillis, value)
 
     done = done + 1
 end
