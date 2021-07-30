@@ -64,7 +64,8 @@ class Producer {
         const networkingTime = Math.round(performance.now() - networkingStart);
 
         const totalTime = processingTime + networkingTime;
-        console.info(`Processing: ${processingTime} ms - Networking: ${networkingTime} ms - Total: ${totalTime} ms`);
+        console.info(`Processing items [${this.minId}, ${this.maxId}]: ` +
+            `${processingTime} ms - Networking: ${networkingTime} ms - Total: ${totalTime} ms`);
 
         setTimeout(this.runCallback, this.chunkPeriodInMillis);
     }
@@ -72,9 +73,9 @@ class Producer {
     async updateKeysAndSortedSetWithRefToValue(now, batch) {
         const timestampsAndIds = [];
 
-        const [minId, maxId] = this.getAndUpdateChunk();
+        this.setAndUpdateChunk();
 
-        for (let i = minId; i <= maxId; i++) {
+        for (let i = this.minId; i <= this.maxId; i++) {
             const key = this.itemKeys.get(i);
 
             timestampsAndIds.push(now);
@@ -88,19 +89,18 @@ class Producer {
     async updateKeysAndSortedSetWithActualValue(now, batch) {
         const timestampsAndIds = [];
 
-        const [minId, maxId] = this.getAndUpdateChunk();
+        this.setAndUpdateChunk();
 
-        for (let i = minId; i <= maxId; i++) {
+        for (let i = this.minId; i <= this.maxId; i++) {
             timestampsAndIds.push(now);
             timestampsAndIds.push(this.itemValues.get(i));
         }
         batch.zadd("latest-ids", ...timestampsAndIds);
     }
 
-    getAndUpdateChunk() {
-        const chunk = this.chunks[this.currentChunk];
+    setAndUpdateChunk() {
+        [this.minId, this.maxId] = this.chunks[this.currentChunk];
         this.currentChunk = (this.currentChunk + 1) % this.chunks.length;
-        return chunk;
     }
 }
 
