@@ -182,6 +182,8 @@ r5.large      | No            | 6       | 50k                | 43         | 31
 
 The idea here is a variation in the test above (references vs actual values). Instead of just having the sorted set with the actual values, we have a Lua script that receives the values and then populates the sorted set AND creates the individual keys. This test answers the following question: what increases the cost when having a sorted set + individual keys? Is it the multiple Redis commands or is it the increased network traffic?
 
+The tests here were run with the `--ws` flag to enable the Lua script for the writer.
+
 The first results:
 
 ```
@@ -198,6 +200,7 @@ Trying 5k items per instance got me close to the bottleneck already. Then I trie
 Instance type | Writers | Chunks | Items per sec each | master CPU | replica CPU
 r6g.large     | 4       | 1      | 5k                 | 48         | 4
 r6g.large     | 4       | 2      | 5k                 | 34.5       | 6
+r6g.large     | 8       | 1      | 10k                | 51         | 10
 r6g.large     | 8       | 2      | 10k                | 51         | 10
 ```
 
@@ -205,7 +208,13 @@ Differently than the test where we split the batch (the regular one not using a 
 
 To understand what exactly may be causing this, I edited the Lua script to basically do nothing. The Redis calls were commented out to rule out the possibility of the actual Redis calls being the culprits. Running the tests again, the slowness was still seen. As a matter of fact, commenting out the whole Lua script (making it just `return 0`) still runs very slowly and the CPU hits the bottleneck just the same when the 8-writer, 10k-each test above is run.
 
-TODO
+The next interesting thing done was to run a new Lua script that, instead of receiving all keys and values, would receive a single key-value pair to process. The previous script is called `store-items.lua` and the new one is called `store-item.lua` (singular). The results were surprisingly better than the all-keys script, although still not good:
+
+![img.png](img.png)
+
+Although below the bottleneck, the CPU was varying a lot, with the master node ranging from 38 up to 43%.
+
+Using Lua scripts here is definitely not the way to go.
 
 ## Lua script vs manually running commands
 
