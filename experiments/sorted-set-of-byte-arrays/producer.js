@@ -99,13 +99,16 @@ class Producer {
         const responses = await batch.exec();
 
         console.info("Responses:");
-        for (const response of responses) {
+        for (const response of responses.slice(0, 5)) {
             const [err, result] = response;
             if (err) {
                 console.error(" - " + err);
             } else {
                 console.info(" - " + result);
             }
+        }
+        if (responses.length > 5) {
+            console.info("(too many commands - showing only 5 out of " + responses.length + ")");
         }
         const networkingTime = Math.round(performance.now() - networkingStart);
 
