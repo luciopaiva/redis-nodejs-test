@@ -12,12 +12,25 @@ class Producer {
     itemValues = new Map();
     minId = 1;
     maxId = 100;
-    periodInMillis = settings.DEFAULT_PRODUCER_PERIOD_IN_MILLIS;
+    chunkPeriodInMillis = 0;
+    chunkCount = 1;
+    currentChunk = 0;
+    chunks = [];
 
-    constructor(minId = this.minId, maxId = this.maxId, periodInMillis = this.periodInMillis) {
+    constructor(minId = this.minId, maxId = this.maxId,
+                periodInMillis = settings.DEFAULT_PRODUCER_PERIOD_IN_MILLIS,
+                chunkCount = this.chunkCount) {
         this.minId = Number(minId);
         this.maxId = Number(maxId);
-        this.periodInMillis = Number(periodInMillis);
+        periodInMillis = Number(periodInMillis);
+        this.chunkCount = Number(chunkCount);
+
+        const itemsPerChunk = Math.trunc((this.maxId - this.minId + 1) / this.chunkCount);
+        for (let i = this.minId; i <= this.maxId; i += itemsPerChunk) {
+            this.chunks.push([i, Math.min(i + itemsPerChunk - 1, this.maxId)]);
+        }
+
+        this.chunkPeriodInMillis = periodInMillis / this.chunks.length;
 
         this.client = RedisClientFactory.startClient(this.runCallback);
         for (let i = this.minId; i <= this.maxId; i++) {
@@ -53,13 +66,15 @@ class Producer {
         const totalTime = processingTime + networkingTime;
         console.info(`Processing: ${processingTime} ms - Networking: ${networkingTime} ms - Total: ${totalTime} ms`);
 
-        setTimeout(this.runCallback, this.periodInMillis);
+        setTimeout(this.runCallback, this.chunkPeriodInMillis);
     }
 
     async updateKeysAndSortedSetWithRefToValue(now, batch) {
         const timestampsAndIds = [];
 
-        for (let i = this.minId; i <= this.maxId; i++) {
+        const [minId, maxId] = this.getAndUpdateChunk();
+
+        for (let i = minId; i <= maxId; i++) {
             const key = this.itemKeys.get(i);
 
             timestampsAndIds.push(now);
@@ -73,11 +88,19 @@ class Producer {
     async updateKeysAndSortedSetWithActualValue(now, batch) {
         const timestampsAndIds = [];
 
-        for (let i = this.minId; i <= this.maxId; i++) {
+        const [minId, maxId] = this.getAndUpdateChunk();
+
+        for (let i = minId; i <= maxId; i++) {
             timestampsAndIds.push(now);
             timestampsAndIds.push(this.itemValues.get(i));
         }
         batch.zadd("latest-ids", ...timestampsAndIds);
+    }
+
+    getAndUpdateChunk() {
+        const chunk = this.chunks[this.currentChunk];
+        this.currentChunk = (this.currentChunk + 1) % this.chunks.length;
+        return chunk;
     }
 }
 
