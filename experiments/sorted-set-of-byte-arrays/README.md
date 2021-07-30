@@ -202,7 +202,7 @@ r6g.large     | 4       | 2      | 5k                 | 34.5       | 6
 
 Considering that splitting the batch in the regular test didn't produce any improvements (see the test a few sections above), this is showing that the batch size does cause problems in the Lua script execution.
 
-To understand what exactly may be causing this, I edited the Lua script to basically do nothing. The Redis calls were commented out.
+To understand what exactly may be causing this, I edited the Lua script to basically do nothing. The Redis calls were commented out to rule out the possibility of the actual Redis calls being the culprits. Running the tests again, the slowness was still seen.
 
 TODO
 
