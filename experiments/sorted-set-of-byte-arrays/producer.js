@@ -31,9 +31,6 @@ class Producer {
 
         this.chunkCount = chunkCount;
 
-        console.info(this.minId, this.maxId, this.chunkCount, periodInMillis);
-        process.exit(0);
-
         const itemsPerChunk = Math.trunc((this.maxId - this.minId + 1) / this.chunkCount);
         for (let i = this.minId; i <= this.maxId; i += itemsPerChunk) {
             this.chunks.push([i, Math.min(i + itemsPerChunk - 1, this.maxId)]);
