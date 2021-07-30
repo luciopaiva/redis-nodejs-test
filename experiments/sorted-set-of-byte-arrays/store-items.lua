@@ -1,3 +1,14 @@
+--[[
+This script expects no keys and a series of generic arguments in the form:nowInMillis
+
+<timestamp> <K keys> <K values>
+
+Where <timestamp> will be used to score values added to the latest-ids sorted set. The reason keys are not being passed as proper keys arguments is because of a hack to prevent Redis from failing due to cross-slot complaints, since hash tags are not being used in this example and keys will fataly hash into different slots.
+
+It is important to mention that Redis prevents multi-slot operations even when all slots hash into the same node (for example, you can still see `CROSSSLOT Keys in request don't hash to the same slot` errors even in single shard mode!). That's mainly to prevent [slot migration issues](https://github.com/redis/redis/issues/5118).
+
+Reference: https://redis.io/topics/cluster-spec#implemented-subset
+--]]
 
 if (#ARGV == 0 or #ARGV % 2 ~= 1) then
     return
