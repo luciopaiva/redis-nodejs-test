@@ -1,4 +1,5 @@
 
+const minimist = require("minimist");
 const RedisClientFactory = require("../../redis-client-factory");
 const utils = require("../../utils");
 const settings = require("./settings");
@@ -17,13 +18,21 @@ class Producer {
     currentChunk = 0;
     chunks = [];
 
-    constructor(minId = this.minId, maxId = this.maxId,
-                periodInMillis = settings.DEFAULT_PRODUCER_PERIOD_IN_MILLIS,
-                chunkCount = this.chunkCount) {
-        this.minId = Number(minId);
-        this.maxId = Number(maxId);
-        periodInMillis = Number(periodInMillis);
-        this.chunkCount = Number(chunkCount);
+    constructor({quantity, periodInMillis, chunkCount, agent, totalAgents}) {
+        if (agent < 1 || agent > totalAgents) {
+            console.error("Error: agent must be greater than zero and not greater than totalAgents!");
+            process.exit(1);
+        }
+
+        const itemsPerAgent = Math.trunc(quantity / totalAgents);
+        this.minId = itemsPerAgent * (agent - 1) + 1;
+        this.maxId = agent === totalAgents ?  // last agent in charge of the rest, even if greater than itemsPerAgent
+            quantity : this.minId + itemsPerAgent - 1;
+
+        this.chunkCount = chunkCount;
+
+        console.info(this.minId, this.maxId, this.chunkCount, periodInMillis);
+        process.exit(0);
 
         const itemsPerChunk = Math.trunc((this.maxId - this.minId + 1) / this.chunkCount);
         for (let i = this.minId; i <= this.maxId; i += itemsPerChunk) {
@@ -104,4 +113,25 @@ class Producer {
     }
 }
 
-new Producer(...process.argv.slice(2));
+const argv = minimist(process.argv.slice(2), {
+    default: {
+        // the total number of items to save across all agents
+        quantity: 100,
+        // time between batches
+        periodInMillis: settings.DEFAULT_PRODUCER_PERIOD_IN_MILLIS,
+        // in how many chunks should a batch be split
+        chunkCount: 1,
+        // this agent's id (must be within [1, totalAgents])
+        agent: 1,
+        // how many concurrent agents will run
+        totalAgents: 1,
+    },
+    alias: {
+        quantity: ["q"],
+        periodInMillis: ["p"],
+        agent: ["a"],
+        totalAgents: ["t"],
+    }
+});
+
+new Producer(argv);
