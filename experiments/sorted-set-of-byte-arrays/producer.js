@@ -133,7 +133,7 @@ class Producer {
             values.push(this.itemValues.get(i));
         }
 
-        const params = [keys.length, ...keys, now, ...values];
+        const params = [0, now, ...keys, ...values];
         // console.info(...params);
 
         batch.storeItems(...params);
