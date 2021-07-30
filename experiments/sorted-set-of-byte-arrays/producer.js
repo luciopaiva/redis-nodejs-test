@@ -21,8 +21,10 @@ class Producer {
     chunks = [];
     storeActualValue;
     shouldWriteUsingScript = false;
+    shouldWriteUsingSingleKeyScript = false;
 
-    constructor({quantity, periodInMillis, chunkCount, agent, totalAgents, storeActualValue, shouldWriteUsingScript}) {
+    constructor({quantity, periodInMillis, chunkCount, agent, totalAgents, storeActualValue, shouldWriteUsingScript,
+                    shouldWriteUsingSingleKeyScript}) {
         if (agent < 1 || agent > totalAgents) {
             console.error("Error: agent must be greater than zero and not greater than totalAgents!");
             process.exit(1);
@@ -44,6 +46,7 @@ class Producer {
 
         this.storeActualValue = storeActualValue;
         this.shouldWriteUsingScript = shouldWriteUsingScript;
+        this.shouldWriteUsingSingleKeyScript = shouldWriteUsingSingleKeyScript;
 
         this.client = RedisClientFactory.startClient(this.runCallback);
 
@@ -55,6 +58,10 @@ class Producer {
         if (this.shouldWriteUsingScript) {
             this.client.defineCommand("storeItems", {
                 lua: fs.readFileSync(path.join(__dirname, "store-items.lua"), "utf-8"),
+            });
+        } else if (this.shouldWriteUsingSingleKeyScript) {
+            this.client.defineCommand("storeItem", {
+                lua: fs.readFileSync(path.join(__dirname, "store-item.lua"), "utf-8"),
             });
         }
     }
@@ -78,6 +85,8 @@ class Producer {
 
         if (this.shouldWriteUsingScript) {
             await this.updateKeysAndSortedSetUsingScript(now, batch);
+        } else if (this.shouldWriteUsingSingleKeyScript) {
+            await this.updateKeysAndSortedSetUsingSingleKeyScript(now, batch);
         } else if (this.storeActualValue) {
             await this.updateKeysAndSortedSetWithActualValue(now, batch);
         } else {
@@ -139,6 +148,14 @@ class Producer {
         batch.storeItems(...params);
     }
 
+    async updateKeysAndSortedSetUsingSingleKeyScript(now, batch) {
+        this.setAndUpdateChunk();
+
+        for (let i = this.minId; i <= this.maxId; i++) {
+            batch.storeItem(1, this.itemKeys.get(i), now, this.itemValues.get(i));
+        }
+    }
+
     async updateKeysAndSortedSetWithActualValue(now, batch) {
         const timestampsAndValues = [];
 
@@ -173,6 +190,8 @@ const argv = minimist(process.argv.slice(2), {
         storeActualValue: settings.SORTED_SET_CONTAINS_ACTUAL_VALUE,
         // whether a Lua script should be used to write keys and sorted set
         shouldWriteUsingScript: false,
+        // a variation of the parameter above where we run a script to update a single key + the sorted set for that key
+        shouldWriteUsingSingleKeyScript: false,
     },
     alias: {
         quantity: ["q"],
@@ -181,6 +200,7 @@ const argv = minimist(process.argv.slice(2), {
         totalAgents: ["t"],
         storeActualValue: ["actual-value"],
         shouldWriteUsingScript: ["ws"],
+        shouldWriteUsingSingleKeyScript: ["sk"],
         chunkCount: ["c"],
     }
 });
