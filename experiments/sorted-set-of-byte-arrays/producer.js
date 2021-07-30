@@ -87,7 +87,17 @@ class Producer {
         const processingTime = Math.round(performance.now() - processingStart);
 
         const networkingStart = performance.now();
-        await batch.exec();
+        const responses = await batch.exec();
+
+        console.info("Responses:");
+        for (const response of responses) {
+            const [err, result] = response;
+            if (err) {
+                console.error(" - " + err);
+            } else {
+                console.info(" - " + result);
+            }
+        }
         const networkingTime = Math.round(performance.now() - networkingStart);
 
         const totalTime = processingTime + networkingTime;
@@ -118,13 +128,13 @@ class Producer {
         const values = [];
 
         for (let i = this.minId; i <= this.maxId; i++) {
-            console.info(`Preparing item ${i}`);
+            // console.info(`Preparing item ${i}`);
             keys.push(this.itemKeys.get(i));
             values.push(this.itemValues.get(i));
         }
 
         const params = [keys.length, ...keys, now, ...values];
-        console.info(...params);
+        // console.info(...params);
 
         batch.storeItems(...params);
     }
