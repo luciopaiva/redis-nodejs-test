@@ -180,7 +180,7 @@ r5.large      | No            | 6       | 50k                | 43         | 31
 
 ## Sending keys only once, but running them through a Lua script
 
-The idea here is a variation in the test above (references vs actual values). Instead of just having the sorted set with the actual values, we have a Lua script that receives the values and then populates the sorted set AND creates the individual keys. This test answers the following question: what increases the cost when having a sorted set + individual keys? Is it the multiple Redis commands or is it the increased network traffic?
+The idea here is a variation in the test above (references vs actual values). Instead of just having the sorted set with the actual values, we have a Lua script that receives the values and then populates the sorted set AND creates the individual keys. This test answers the following question: what increases the cost when having a sorted set + individual keys? Is it the multiple Redis commands or is it the increased network traffic? Spoiler alert: none of them.
 
 The tests here were run with the `--ws` flag to enable the Lua script for the writer.
 
@@ -212,7 +212,12 @@ The next interesting thing done was to run a new Lua script that, instead of rec
 
 ![img.png](img.png)
 
-Although below the bottleneck, the CPU was varying a lot, with the master node ranging from 38 up to 43%.
+Although below the bottleneck, the CPU was varying a lot, with the master node ranging from 38 up to 43%. Compare it with the regular test where no Lua script is used, the individual keys hold their values and the sorted set has a reference to each key:
+
+```
+Instance type | Writers | Items per sec each | master CPU | replica CPU
+r6g.large     | 8       | 10k                | 21.5       | 14
+```
 
 Using Lua scripts here is definitely not the way to go.
 
