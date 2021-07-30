@@ -198,11 +198,12 @@ Trying 5k items per instance got me close to the bottleneck already. Then I trie
 Instance type | Writers | Chunks | Items per sec each | master CPU | replica CPU
 r6g.large     | 4       | 1      | 5k                 | 48         | 4
 r6g.large     | 4       | 2      | 5k                 | 34.5       | 6
+r6g.large     | 8       | 2      | 10k                | 51         | 10
 ```
 
-Considering that splitting the batch in the regular test didn't produce any improvements (see the test a few sections above), this is showing that the batch size does cause problems in the Lua script execution.
+Differently than the test where we split the batch (the regular one not using a Lua script a few sections above) where we didn't see any change, this current test is showing that the batch size does cause problems in the Lua script execution.
 
-To understand what exactly may be causing this, I edited the Lua script to basically do nothing. The Redis calls were commented out to rule out the possibility of the actual Redis calls being the culprits. Running the tests again, the slowness was still seen.
+To understand what exactly may be causing this, I edited the Lua script to basically do nothing. The Redis calls were commented out to rule out the possibility of the actual Redis calls being the culprits. Running the tests again, the slowness was still seen. As a matter of fact, commenting out the whole Lua script (making it just `return 0`) still runs very slowly and the CPU hits the bottleneck just the same when the 8-writer, 10k-each test above is run.
 
 TODO
 
