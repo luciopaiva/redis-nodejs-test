@@ -118,11 +118,15 @@ class Producer {
         const values = [];
 
         for (let i = this.minId; i <= this.maxId; i++) {
+            console.info(`Preparing item ${i}`);
             keys.push(this.itemKeys.get(i));
             values.push(this.itemValues.get(i));
         }
 
-        batch.storeItems(keys.length, ...keys, now, ...values);
+        const params = [keys.length, ...keys, now, ...values];
+        console.info(...params);
+
+        batch.storeItems(...params);
     }
 
     async updateKeysAndSortedSetWithActualValue(now, batch) {
