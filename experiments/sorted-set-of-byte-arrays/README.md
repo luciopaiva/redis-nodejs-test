@@ -225,7 +225,7 @@ Using Lua scripts here is definitely not the way to go.
 
 TODO
 
-On the reader side, is the Lua script more efficient for not requiring multiple network roundtrips?
+On the reader side, is the Lua script more efficient for not requiring multiple network roundtrips? Considering the tests with the writer script, avoiding the script will be possibly better.
 
 ## How consumers affect CPU
 
