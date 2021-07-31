@@ -3,13 +3,21 @@ const RedisClientFactory = require("../../redis-client-factory");
 
 class Producer {
 
+    client;
+
     constructor() {
         this.runCallback = this.run.bind(this);
-        RedisClientFactory.startClusterClient(this.runCallback);
+        this.client = RedisClientFactory.startClusterClient(this.runCallback);
     }
 
     async run() {
-        console.info("test");
+        const nodes = await this.client.nodes("all");
+
+        console.info("\nNodes:");
+        for (const node of nodes) {
+            console.info(node);
+        }
+
         setTimeout(this.runCallback, 1000);
     }
 }
