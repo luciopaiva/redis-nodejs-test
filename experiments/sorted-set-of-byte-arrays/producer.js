@@ -13,6 +13,7 @@ class Producer {
     nextTimeShouldCleanExpired = 0;
     itemKeys = new Map();
     itemValues = new Map();
+    quantity = 0;
     minId = 1;
     maxId = 100;
     chunkPeriodInMillis = 0;
@@ -22,14 +23,16 @@ class Producer {
     storeActualValue;
     shouldWriteUsingScript = false;
     shouldWriteUsingSingleKeyScript = false;
+    storeToList = false;
 
     constructor({quantity, periodInMillis, chunkCount, agent, totalAgents, storeActualValue, shouldWriteUsingScript,
-                    shouldWriteUsingSingleKeyScript}) {
+                    shouldWriteUsingSingleKeyScript, storeToList}) {
         if (agent < 1 || agent > totalAgents) {
             console.error("Error: agent must be greater than zero and not greater than totalAgents!");
             process.exit(1);
         }
 
+        this.quantity = quantity;
         const itemsPerAgent = Math.trunc(quantity / totalAgents);
         this.minId = itemsPerAgent * (agent - 1) + 1;
         this.maxId = agent === totalAgents ?  // last agent in charge of the rest, even if greater than itemsPerAgent
@@ -47,6 +50,7 @@ class Producer {
         this.storeActualValue = storeActualValue;
         this.shouldWriteUsingScript = shouldWriteUsingScript;
         this.shouldWriteUsingSingleKeyScript = shouldWriteUsingSingleKeyScript;
+        this.storeToList = storeToList;
 
         this.client = RedisClientFactory.startClient(this.runCallback);
 
@@ -77,13 +81,19 @@ class Producer {
 
         const batch = this.client.pipeline();
 
+        // remove expired elements
         if (this.nextTimeShouldCleanExpired < now) {
-            // remove expired elements
-            batch.zremrangebyscore("latest-ids", "-inf", now - settings.EXPIRATION_TIME_IN_MILLIS);
+            if (this.storeToList) {
+                batch.ltrim("latest-ids-list", -this.quantity, -1);
+            } else {
+                batch.zremrangebyscore("latest-ids", "-inf", now - settings.EXPIRATION_TIME_IN_MILLIS);
+            }
             this.nextTimeShouldCleanExpired = now + settings.PURGE_PERIOD_IN_MILLIS;
         }
 
-        if (this.shouldWriteUsingScript) {
+        if (this.storeToList) {
+            await this.updateKeysAndList(now, batch);
+        } else if (this.shouldWriteUsingScript) {
             await this.updateKeysAndSortedSetUsingScript(now, batch);
         } else if (this.shouldWriteUsingSingleKeyScript) {
             await this.updateKeysAndSortedSetUsingSingleKeyScript(now, batch);
@@ -115,6 +125,20 @@ class Producer {
         const totalTime = processingTime + networkingTime;
         console.info(`Processing items [${this.minId}, ${this.maxId}]: ` +
             `${processingTime} ms - Networking: ${networkingTime} ms - Total: ${totalTime} ms`);
+    }
+
+    async updateKeysAndList(now, batch) {
+        const ids = [];
+
+        this.setAndUpdateChunk();
+
+        for (let i = this.minId; i <= this.maxId; i++) {
+            const key = this.itemKeys.get(i);
+
+            ids.push(key);
+            batch.setex(key, settings.EXPIRATION_TIME_IN_SECONDS, this.itemValues.get(i));
+        }
+        batch.rpush("latest-ids-list", ...ids);
     }
 
     async updateKeysAndSortedSetWithRefToValue(now, batch) {
@@ -195,6 +219,8 @@ const argv = minimist(process.argv.slice(2), {
         shouldWriteUsingScript: false,
         // a variation of the parameter above where we run a script to update a single key + the sorted set for that key
         shouldWriteUsingSingleKeyScript: false,
+        // this is a flag to experiment saving to a list instead of a sorted set
+        storeToList: false,
     },
     alias: {
         quantity: ["q"],
@@ -205,6 +231,7 @@ const argv = minimist(process.argv.slice(2), {
         shouldWriteUsingScript: ["ws"],
         shouldWriteUsingSingleKeyScript: ["sk"],
         chunkCount: ["c"],
+        storeToList: ["sl"],
     }
 });
 

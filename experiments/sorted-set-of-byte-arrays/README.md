@@ -243,4 +243,4 @@ TODO
 
 This is probably a separate experiment, but the question is: is using a list to get the latest K items faster than using a sorted set?
 
-These data structures are not directly interchangeable, but they can replace one another in certain situations. For instance, if you need the K latest items, you are good. If you also need to count the latest unique items still valid, you won't be able to count them with a list. You will probably need an auxiliary HyperLogLog structure for that.
+These data structures are not directly interchangeable, but they can replace one another in certain situations. For instance, if you just need the K latest items, you could probably use both. If you also need to count the latest unique items produced, you won't be able to count them with a list. You will probably need an auxiliary HyperLogLog structure for that.
