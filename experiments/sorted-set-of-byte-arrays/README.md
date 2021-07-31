@@ -272,4 +272,13 @@ In the chart above, the HLL is turned (`--sl --slh`) on at 14:36 and off at 14:4
 
 We could also replace the sorted set with a set of sets, i.e., one set being created every minute to hold the latest items. It would both give the latest items and the count.
 
+The test results are very similar to the ones with the HLL above, including the inconstant CPU usage:
 
+```
+Instance type | Writers | Items per sec each | master CPU | replica CPU
+r6g.large     | 8       | 25k                | 31.5       | 18.5
+```
+
+![img_6.png](charts/img_6.png)
+
+To the left of the red bar, the HLL test; to the right, the set test.
