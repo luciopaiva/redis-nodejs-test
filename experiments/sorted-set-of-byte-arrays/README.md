@@ -239,8 +239,20 @@ Here I want to test how ioredis deals with multiple shards and if it's able to f
 
 ## Sorted set vs lists
 
-TODO
+Is using a list to get the latest K items significantly faster than using a sorted set?
 
-This is probably a separate experiment, but the question is: is using a list to get the latest K items faster than using a sorted set?
+These data structures are not directly interchangeable, but they can replace one another under certain situations. For instance, say you are currently using a sorted set to be able to fetch the latest items from the last X seconds. You could in principle replace it with a list if your requirement "from the last X seconds" could be relaxed to "the last K items".
 
-These data structures are not directly interchangeable, but they can replace one another in certain situations. For instance, if you just need the K latest items, you could probably use both. If you also need to count the latest unique items produced, you won't be able to count them with a list. You will probably need an auxiliary HyperLogLog structure for that.
+Let's compare the baseline test (saving to individual keys + sorted set) to the list one (individual keys + list) by toggling on the `--sl` flag:
+
+```
+Instance type | Writers | Items per sec each | master CPU | replica CPU
+r6g.large     | 8       | 25k                | 44.5       | 29
+r6g.large     | 8       | 25k                | 36         | 24
+```
+
+We can reduce the CPU to 80% of the baseline test.
+
+Now say that we also use the sorted set to count active elements. For instance, the unique items that were posted in the last X seconds. The list doesn't provide an easy way to count the unique items.
+
+One idea is to use a HyperLogLog structure for that. Creating a new HLL every minute, we can use the one from the previous minute to have an estimate on the count. It won't be an exact count because 1) HLLs provide only an approximation and 2) the count is delayed a whole minute since we need to accumulate the data before using it.

@@ -24,9 +24,10 @@ class Producer {
     shouldWriteUsingScript = false;
     shouldWriteUsingSingleKeyScript = false;
     storeToList = false;
+    countWithHLL = false;
 
     constructor({quantity, periodInMillis, chunkCount, agent, totalAgents, storeActualValue, shouldWriteUsingScript,
-                    shouldWriteUsingSingleKeyScript, storeToList}) {
+                    shouldWriteUsingSingleKeyScript, storeToList, countWithHLL}) {
         if (agent < 1 || agent > totalAgents) {
             console.error("Error: agent must be greater than zero and not greater than totalAgents!");
             process.exit(1);
@@ -51,6 +52,7 @@ class Producer {
         this.shouldWriteUsingScript = shouldWriteUsingScript;
         this.shouldWriteUsingSingleKeyScript = shouldWriteUsingSingleKeyScript;
         this.storeToList = storeToList;
+        this.countWithHLL = countWithHLL;
 
         this.client = RedisClientFactory.startClient(this.runCallback);
 
@@ -139,6 +141,12 @@ class Producer {
             batch.setex(key, settings.EXPIRATION_TIME_IN_SECONDS, this.itemValues.get(i));
         }
         batch.rpush("latest-ids-list", ...ids);
+
+        if (this.countWithHLL) {
+            const minute = Math.trunc(Date.now() / 60000);
+            batch.pfadd("latest-ids-count:" + minute, ...ids);
+            batch.expire("latest-ids-count:" + minute, 3 * 60);  // keep for 3 minutes
+        }
     }
 
     async updateKeysAndSortedSetWithRefToValue(now, batch) {
@@ -221,6 +229,8 @@ const argv = minimist(process.argv.slice(2), {
         shouldWriteUsingSingleKeyScript: false,
         // this is a flag to experiment saving to a list instead of a sorted set
         storeToList: false,
+        // when storeToList is true, this is used to enable a HyperLogLog structure to count items
+        countWithHLL: false,
     },
     alias: {
         quantity: ["q"],
@@ -232,6 +242,7 @@ const argv = minimist(process.argv.slice(2), {
         shouldWriteUsingSingleKeyScript: ["sk"],
         chunkCount: ["c"],
         storeToList: ["sl"],
+        countWithHLL: ["slh"],
     }
 });
 
