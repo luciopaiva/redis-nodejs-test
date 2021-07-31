@@ -233,10 +233,6 @@ How does adding consumers affect CPU? If they are reading from replicas, it shou
 
 TODO
 
-## Multiple shards
-
-Here I want to test how ioredis deals with multiple shards and if it's able to find where keys are by its own.
-
 ## Sorted set vs lists
 
 Is using a list to get the latest K items significantly faster than using a sorted set?
@@ -282,3 +278,9 @@ r6g.large     | 8       | 25k                | 31.5       | 18.5
 ![img_6.png](charts/img_6.png)
 
 To the left of the red bar, the HLL test; to the right, the set test.
+
+## Multiple shards
+
+TODO
+
+Here I want to test how ioredis deals with multiple shards and if it's able to find where keys are by its own.
