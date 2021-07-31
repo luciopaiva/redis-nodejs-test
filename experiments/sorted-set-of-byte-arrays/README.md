@@ -210,7 +210,7 @@ To understand what exactly may be causing this, I edited the Lua script to basic
 
 The next interesting thing done was to run a new Lua script that, instead of receiving all keys and values, would receive a single key-value pair to process. The previous script is called `store-items.lua` and the new one is called `store-item.lua` (singular). The results were surprisingly better than the all-keys script, although still not good:
 
-![img.png](img.png)
+![img_4.png](charts/img_4.png)
 
 Although below the bottleneck, the CPU was varying a lot, with the master node ranging from 38 up to 43%. Compare it with the regular test where no Lua script is used, the individual keys hold their values and the sorted set has a reference to each key:
 
@@ -256,3 +256,20 @@ We can reduce the CPU to 80% of the baseline test.
 Now say that we also use the sorted set to count active elements. For instance, the unique items that were posted in the last X seconds. The list doesn't provide an easy way to count the unique items.
 
 One idea is to use a HyperLogLog structure for that. Creating a new HLL every minute, we can use the one from the previous minute to have an estimate on the count. It won't be an exact count because 1) HLLs provide only an approximation and 2) the count is delayed a whole minute since we need to accumulate the data before using it.
+
+Here's the result of turning HLL on:
+
+![img_5.png](charts/img_5.png)
+
+```
+Instance type | Writers | Items per sec each | master CPU | replica CPU
+r6g.large     | 8       | 25k                | 30.5       | 18.5
+```
+
+In the chart above, the HLL is turned (`--sl --slh`) on at 14:36 and off at 14:49. The periods before and after that in chart show a test running with only `--slh`. Strangely, turning on the HLL count brought the CPU usage *down* - although more work is being performed! Also strange, CPU usage is not constant for some reason (differently from all other tests seen so far).
+
+## Sorted sets vs sets
+
+We could also replace the sorted set with a set of sets, i.e., one set being created every minute to hold the latest items. It would both give the latest items and the count.
+
+
