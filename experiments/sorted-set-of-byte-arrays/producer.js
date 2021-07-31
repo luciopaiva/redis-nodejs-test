@@ -23,11 +23,12 @@ class Producer {
     storeActualValue;
     shouldWriteUsingScript = false;
     shouldWriteUsingSingleKeyScript = false;
-    storeToList = false;
+    storeIntoList = false;
     countWithHLL = false;
+    storeIntoSet = false;
 
     constructor({quantity, periodInMillis, chunkCount, agent, totalAgents, storeActualValue, shouldWriteUsingScript,
-                    shouldWriteUsingSingleKeyScript, storeToList, countWithHLL}) {
+                    shouldWriteUsingSingleKeyScript, storeIntoList, countWithHLL, storeIntoSet}) {
         if (agent < 1 || agent > totalAgents) {
             console.error("Error: agent must be greater than zero and not greater than totalAgents!");
             process.exit(1);
@@ -51,8 +52,9 @@ class Producer {
         this.storeActualValue = storeActualValue;
         this.shouldWriteUsingScript = shouldWriteUsingScript;
         this.shouldWriteUsingSingleKeyScript = shouldWriteUsingSingleKeyScript;
-        this.storeToList = storeToList;
+        this.storeIntoList = storeIntoList;
         this.countWithHLL = countWithHLL;
+        this.storeIntoSet = storeIntoSet;
 
         this.client = RedisClientFactory.startClient(this.runCallback);
 
@@ -85,7 +87,7 @@ class Producer {
 
         // remove expired elements
         if (this.nextTimeShouldCleanExpired < now) {
-            if (this.storeToList) {
+            if (this.storeIntoList) {
                 batch.ltrim("latest-ids-list", -this.quantity, -1);
             } else {
                 batch.zremrangebyscore("latest-ids", "-inf", now - settings.EXPIRATION_TIME_IN_MILLIS);
@@ -93,7 +95,9 @@ class Producer {
             this.nextTimeShouldCleanExpired = now + settings.PURGE_PERIOD_IN_MILLIS;
         }
 
-        if (this.storeToList) {
+        if (this.storeIntoSet) {
+            await this.updateKeysAndSet(now, batch);
+        } else if (this.storeIntoList) {
             await this.updateKeysAndList(now, batch);
         } else if (this.shouldWriteUsingScript) {
             await this.updateKeysAndSortedSetUsingScript(now, batch);
@@ -127,6 +131,23 @@ class Producer {
         const totalTime = processingTime + networkingTime;
         console.info(`Processing items [${this.minId}, ${this.maxId}]: ` +
             `${processingTime} ms - Networking: ${networkingTime} ms - Total: ${totalTime} ms`);
+    }
+
+    async updateKeysAndSet(now, batch) {
+        const ids = [];
+
+        this.setAndUpdateChunk();
+
+        for (let i = this.minId; i <= this.maxId; i++) {
+            const key = this.itemKeys.get(i);
+
+            ids.push(key);
+            batch.setex(key, settings.EXPIRATION_TIME_IN_SECONDS, this.itemValues.get(i));
+        }
+
+        const minute = Math.trunc(Date.now() / 60000);
+        batch.sadd("latest-ids:" + minute, ...ids);
+        batch.expire("latest-ids:" + minute, 3 * 60);  // keep for 3 minutes
     }
 
     async updateKeysAndList(now, batch) {
@@ -228,9 +249,11 @@ const argv = minimist(process.argv.slice(2), {
         // a variation of the parameter above where we run a script to update a single key + the sorted set for that key
         shouldWriteUsingSingleKeyScript: false,
         // this is a flag to experiment saving to a list instead of a sorted set
-        storeToList: false,
+        storeIntoList: false,
         // when storeToList is true, this is used to enable a HyperLogLog structure to count items
         countWithHLL: false,
+        // similar to storeIntoList, but stores into a set
+        storeIntoSet: false,
     },
     alias: {
         quantity: ["q"],
@@ -243,6 +266,7 @@ const argv = minimist(process.argv.slice(2), {
         chunkCount: ["c"],
         storeToList: ["sl"],
         countWithHLL: ["slh"],
+        storeIntoSet: ["ss"],
     }
 });
 
