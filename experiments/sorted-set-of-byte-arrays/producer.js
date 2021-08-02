@@ -98,17 +98,17 @@ class Producer {
         }
 
         if (this.storeIntoSet) {
-            await this.updateKeysAndSet(now, batch);
+            this.updateKeysAndSet(now, batch);
         } else if (this.storeIntoList) {
-            await this.updateKeysAndList(now, batch);
+            this.updateKeysAndList(now, batch);
         } else if (this.shouldWriteUsingScript) {
-            await this.updateKeysAndSortedSetUsingScript(now, batch);
+            this.updateKeysAndSortedSetUsingScript(now, batch);
         } else if (this.shouldWriteUsingSingleKeyScript) {
-            await this.updateKeysAndSortedSetUsingSingleKeyScript(now, batch);
+            this.updateKeysAndSortedSetUsingSingleKeyScript(now, batch);
         } else if (this.storeActualValue) {
-            await this.updateKeysAndSortedSetWithActualValue(now, batch);
+            this.updateKeysAndSortedSetWithActualValue(now, batch);
         } else {
-            await this.updateKeysAndSortedSetWithRefToValue(now, batch);
+            this.updateKeysAndSortedSetWithRefToValue(now, batch);
         }
 
         const processingTime = Math.round(performance.now() - processingStart);
@@ -118,7 +118,7 @@ class Producer {
 
         console.info("Responses:");
         for (const response of responses.slice(0, 5)) {
-            const [err, result] = response;
+            const [err, result] = Array.isArray(response) ? response : [null, response];
             if (err) {
                 console.error(" - " + err);
             } else {
@@ -135,7 +135,7 @@ class Producer {
             `${processingTime} ms - Networking: ${networkingTime} ms - Total: ${totalTime} ms`);
     }
 
-    async updateKeysAndSet(now, batch) {
+    updateKeysAndSet(now, batch) {
         const ids = [];
 
         this.setAndUpdateChunk();
@@ -152,7 +152,7 @@ class Producer {
         batch.push(this.client.expire("latest-ids:" + minute, 3 * 60));  // keep for 3 minutes
     }
 
-    async updateKeysAndList(now, batch) {
+    updateKeysAndList(now, batch) {
         const ids = [];
 
         this.setAndUpdateChunk();
@@ -172,7 +172,7 @@ class Producer {
         }
     }
 
-    async updateKeysAndSortedSetWithRefToValue(now, batch) {
+    updateKeysAndSortedSetWithRefToValue(now, batch) {
         const timestampsAndIds = [];
 
         this.setAndUpdateChunk();
@@ -188,7 +188,7 @@ class Producer {
         batch.push(this.client.zadd("latest-ids", ...timestampsAndIds));
     }
 
-    async updateKeysAndSortedSetUsingScript(now, batch) {
+    updateKeysAndSortedSetUsingScript(now, batch) {
         this.setAndUpdateChunk();
 
         const keys = [];
@@ -206,7 +206,7 @@ class Producer {
         batch.push(this.client.storeItems(...params));
     }
 
-    async updateKeysAndSortedSetUsingSingleKeyScript(now, batch) {
+    updateKeysAndSortedSetUsingSingleKeyScript(now, batch) {
         this.setAndUpdateChunk();
 
         for (let i = this.minId; i <= this.maxId; i++) {
@@ -214,7 +214,7 @@ class Producer {
         }
     }
 
-    async updateKeysAndSortedSetWithActualValue(now, batch) {
+    updateKeysAndSortedSetWithActualValue(now, batch) {
         const timestampsAndValues = [];
 
         this.setAndUpdateChunk();
