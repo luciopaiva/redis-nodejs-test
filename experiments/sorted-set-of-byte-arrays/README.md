@@ -281,6 +281,55 @@ To the left of the red bar, the HLL test; to the right, the set test.
 
 ## Multiple shards
 
-TODO
+In this test we add multiple shards to be able to scale the writer load. Changing the producer code to deal with multiple shards was relatively simple (basically just a matter of replacing `new Redis` with `new Redis.Cluster`), but I was manually pipelining commands using `client.pipeline()` and this doesn't work with multiple shards since each node must have its own pipeline. `ioredis` could internally split commands into separate pipelines, but it doesn't do it for the `pipeline()` method. Thankfully, it does create individual pipelines if you toggle on the option `enableAutoPipelining`, so I changed the code to use it.
 
-Here I want to test how ioredis deals with multiple shards and if it's able to find where keys are by its own.
+Now for the results. My test cluster had 3 shards, each with 1 master and 2 replicas. This is the baseline result for the single-shard test with 8 writers, 25k items/s each:
+
+```
+Instance type | Writers | Items per writer per sec | master CPU | replica CPU
+r6g.large     | 8       | 25k                      | 45         | 30
+```
+
+Now the multi-shard results (same 8 writers with 25k items/s each):
+
+```
+Node      | CPU
+master  1 | 11
+master  2 | 25
+master  3 | 11
+replica 1 | 8
+replica 2 | 16
+replica 3 | 8
+```
+
+Considerably lower, definitely scaled well. The shard #2 had higher CPU usage due to the fact that it stores the sorted set slot and, as we've seen in other tests, sorted sets use a lot of CPU.
+
+Now we are finally able to scale to 300k items per second, number we couldn't achieve in single-shard mode. To run 37.5k items/sec per writer, I had to increase Node.js' stack size. That's how I ran it:
+
+    node --stack-size=2000 producer.js --cluster -q 300000 -t 8 -a 1
+
+And here are the results:
+
+```
+Node      | CPU
+master  1 | 13.5
+master  2 | 32
+master  3 | 13.5
+replica 1 | 9.5
+replica 2 | 21
+replica 3 | 9.5
+```
+
+And why not 400k items/sec?
+
+```
+Node      | CPU
+master  1 | 15
+master  2 | 37.5
+master  3 | 15
+replica 1 | 10
+replica 2 | 24
+replica 3 | 11
+```
+
+I tried 500k, but the maximum limit each writer could handle was ~52k and I'd have to increase the number of writers to be able to go higher.
