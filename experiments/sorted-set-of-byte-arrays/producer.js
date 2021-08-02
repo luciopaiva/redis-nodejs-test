@@ -28,7 +28,7 @@ class Producer {
     storeIntoSet = false;
 
     constructor({quantity, periodInMillis, chunkCount, agent, totalAgents, storeActualValue, shouldWriteUsingScript,
-                    shouldWriteUsingSingleKeyScript, storeIntoList, countWithHLL, storeIntoSet}) {
+                    shouldWriteUsingSingleKeyScript, storeIntoList, countWithHLL, storeIntoSet, clusterMode}) {
         if (agent < 1 || agent > totalAgents) {
             console.error("Error: agent must be greater than zero and not greater than totalAgents!");
             process.exit(1);
@@ -56,7 +56,9 @@ class Producer {
         this.countWithHLL = countWithHLL;
         this.storeIntoSet = storeIntoSet;
 
-        this.client = RedisClientFactory.startClient(this.runCallback);
+        this.client = clusterMode ?
+            RedisClientFactory.startClusterClient(this.runCallback) :
+            RedisClientFactory.startClient(this.runCallback);
 
         for (let i = this.minId; i <= this.maxId; i++) {
             this.itemKeys.set(i, `item:${i}`);
@@ -254,6 +256,8 @@ const argv = minimist(process.argv.slice(2), {
         countWithHLL: false,
         // similar to storeIntoList, but stores into a set
         storeIntoSet: false,
+        // enables the client to work in cluster mode
+        clusterMode: false,
     },
     alias: {
         quantity: ["q"],
@@ -267,6 +271,7 @@ const argv = minimist(process.argv.slice(2), {
         storeToList: ["sl"],
         countWithHLL: ["slh"],
         storeIntoSet: ["ss"],
+        clusterMode: ["cm", "cluster"],
     }
 });
 
