@@ -85,14 +85,14 @@ class Producer {
         const processingStart = performance.now();
         const now = Date.now();
 
-        const batch = this.client.pipeline();
+        const batch = [];
 
         // remove expired elements
         if (this.nextTimeShouldCleanExpired < now) {
             if (this.storeIntoList) {
-                batch.ltrim("latest-ids-list", -this.quantity, -1);
+                batch.push(this.client.ltrim("latest-ids-list", -this.quantity, -1));
             } else {
-                batch.zremrangebyscore("latest-ids", "-inf", now - settings.EXPIRATION_TIME_IN_MILLIS);
+                batch.push(this.client.zremrangebyscore("latest-ids", "-inf", now - settings.EXPIRATION_TIME_IN_MILLIS));
             }
             this.nextTimeShouldCleanExpired = now + settings.PURGE_PERIOD_IN_MILLIS;
         }
@@ -114,7 +114,7 @@ class Producer {
         const processingTime = Math.round(performance.now() - processingStart);
 
         const networkingStart = performance.now();
-        const responses = await batch.exec();
+        const responses = await Promise.all(batch);
 
         console.info("Responses:");
         for (const response of responses.slice(0, 5)) {
@@ -144,12 +144,12 @@ class Producer {
             const key = this.itemKeys.get(i);
 
             ids.push(key);
-            batch.setex(key, settings.EXPIRATION_TIME_IN_SECONDS, this.itemValues.get(i));
+            batch.push(this.client.setex(key, settings.EXPIRATION_TIME_IN_SECONDS, this.itemValues.get(i)));
         }
 
         const minute = Math.trunc(Date.now() / 60000);
-        batch.sadd("latest-ids:" + minute, ...ids);
-        batch.expire("latest-ids:" + minute, 3 * 60);  // keep for 3 minutes
+        batch.push(this.client.sadd("latest-ids:" + minute, ...ids));
+        batch.push(this.client.expire("latest-ids:" + minute, 3 * 60));  // keep for 3 minutes
     }
 
     async updateKeysAndList(now, batch) {
@@ -161,14 +161,14 @@ class Producer {
             const key = this.itemKeys.get(i);
 
             ids.push(key);
-            batch.setex(key, settings.EXPIRATION_TIME_IN_SECONDS, this.itemValues.get(i));
+            batch.push(this.client.setex(key, settings.EXPIRATION_TIME_IN_SECONDS, this.itemValues.get(i)));
         }
-        batch.rpush("latest-ids-list", ...ids);
+        batch.push(this.client.rpush("latest-ids-list", ...ids));
 
         if (this.countWithHLL) {
             const minute = Math.trunc(Date.now() / 60000);
-            batch.pfadd("latest-ids-count:" + minute, ...ids);
-            batch.expire("latest-ids-count:" + minute, 3 * 60);  // keep for 3 minutes
+            batch.push(this.client.pfadd("latest-ids-count:" + minute, ...ids));
+            batch.push(this.client.expire("latest-ids-count:" + minute, 3 * 60));  // keep for 3 minutes
         }
     }
 
@@ -183,9 +183,9 @@ class Producer {
             timestampsAndIds.push(now);
             timestampsAndIds.push(key);
 
-            batch.setex(key, settings.EXPIRATION_TIME_IN_SECONDS, this.itemValues.get(i));
+            batch.push(this.client.setex(key, settings.EXPIRATION_TIME_IN_SECONDS, this.itemValues.get(i)));
         }
-        batch.zadd("latest-ids", ...timestampsAndIds);
+        batch.push(this.client.zadd("latest-ids", ...timestampsAndIds));
     }
 
     async updateKeysAndSortedSetUsingScript(now, batch) {
@@ -203,14 +203,14 @@ class Producer {
         const params = [0, now, ...keys, ...values];
         // console.info(...params);
 
-        batch.storeItems(...params);
+        batch.push(this.client.storeItems(...params));
     }
 
     async updateKeysAndSortedSetUsingSingleKeyScript(now, batch) {
         this.setAndUpdateChunk();
 
         for (let i = this.minId; i <= this.maxId; i++) {
-            batch.storeItem(1, this.itemKeys.get(i), now, this.itemValues.get(i));
+            batch.push(this.client.storeItem(1, this.itemKeys.get(i), now, this.itemValues.get(i)));
         }
     }
 
@@ -223,7 +223,7 @@ class Producer {
             timestampsAndValues.push(now);
             timestampsAndValues.push(this.itemValues.get(i));
         }
-        batch.zadd("latest-ids", ...timestampsAndValues);
+        batch.push(this.client.zadd("latest-ids", ...timestampsAndValues));
     }
 
     setAndUpdateChunk() {

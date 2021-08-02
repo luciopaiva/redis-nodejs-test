@@ -8,6 +8,8 @@ module.exports = class RedisClientFactory {
     static startClient(handler, configFileName = CONFIG_FILE_NAME) {
         const clientConfig = require(configFileName);
 
+        clientConfig["enableAutoPipelining"] = true;
+
         const client = new Redis(clientConfig);
         client.on("error", error => console.error(error));
         client.on("connect", () => console.info("client> connected"));
