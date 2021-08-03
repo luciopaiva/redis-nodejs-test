@@ -1,5 +1,6 @@
 
 const path = require("path");
+const minimist = require("minimist");
 const RedisClientFactory = require("../../redis-client-factory");
 const settings = require("./settings");
 
@@ -9,9 +10,11 @@ class Consumer {
     runCallback = this.run.bind(this);
     scriptMode;
 
-    constructor(mode) {
-        this.scriptMode = Consumer.parseMode(mode);
-        this.client = RedisClientFactory.startClient(this.runCallback);
+    constructor({scriptMode, clusterMode}) {
+        this.scriptMode = Consumer.parseMode(scriptMode);
+        this.client = clusterMode ?
+            RedisClientFactory.startClusterClient(this.runCallback) :
+            RedisClientFactory.startClient(this.runCallback);
 
         if (this.scriptMode) {
             this.client.defineCommand("fetchLatestItems", {
@@ -60,14 +63,16 @@ class Consumer {
         const ids = await this.client.zrangebyscore("latest-ids", cutOffTime, "+inf");
 
         if (ids.length > 0) {
-            const batch = this.client.pipeline();
+            const batch = [];
             for (const id of ids) {
-                batch.get(id);
+                batch.push(this.client.get(id));
             }
 
-            await batch.exec();
-            // const responses = await batch.exec();
-            // console.info(responses.map(([, result]) => result));
+            const responses = await Promise.all(batch);
+            console.info(`Responses received: ${responses.length}`);
+            for (const resp of responses) {
+                console.info(resp);
+            }
         }
     }
 
@@ -84,4 +89,15 @@ class Consumer {
     }
 }
 
-new Consumer(...process.argv.slice(2));
+const argv = minimist(process.argv.slice(2), {
+    default: {
+        scriptMode: settings.CONSUMER_MODE_PARAM_MANUAL,
+        clusterMode: false,
+    },
+    alias: {
+        scriptMode: ["s", "script-mode"],
+        clusterMode: ["cm", "cluster"],
+    }
+});
+
+new Consumer(argv);
