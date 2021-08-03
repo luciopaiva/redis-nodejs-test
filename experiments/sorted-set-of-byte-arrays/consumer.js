@@ -65,7 +65,7 @@ class Consumer {
         const ids = await (this.limit > 0 ?
             this.client.zrevrangebyscore("latest-ids", "+inf", cutOffTime, "limit", "0", this.limit) :
             this.client.zrangebyscore("latest-ids", cutOffTime, "+inf"));
-
+        console.info(ids);
         if (ids.length > 0) {
             const batch = [];
             for (const id of ids) {
