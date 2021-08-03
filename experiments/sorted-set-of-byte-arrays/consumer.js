@@ -62,9 +62,9 @@ class Consumer {
         console.info(`Cardinality: ${cardResponse}`);
 
         const cutOffTime = Date.now() - settings.EXPIRATION_TIME_IN_MILLIS;
-        const ids = await this.limit > 0 ?
+        const ids = await (this.limit > 0 ?
             this.client.zrevrangebyscore("latest-ids", "+inf", cutOffTime, "limit", "0", this.limit) :
-            this.client.zrangebyscore("latest-ids", cutOffTime, "+inf");
+            this.client.zrangebyscore("latest-ids", cutOffTime, "+inf"));
 
         if (ids.length > 0) {
             const batch = [];
