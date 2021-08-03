@@ -69,6 +69,7 @@ class Consumer {
         if (ids.length > 0) {
             const batch = [];
             for (const id of ids) {
+                console.info(id);
                 batch.push(this.client.get(id));
             }
 
