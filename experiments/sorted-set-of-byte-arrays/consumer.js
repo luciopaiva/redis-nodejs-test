@@ -9,9 +9,11 @@ class Consumer {
     client;
     runCallback = this.run.bind(this);
     scriptMode;
+    limit;
 
-    constructor({scriptMode, clusterMode}) {
+    constructor({scriptMode, clusterMode, limit}) {
         this.scriptMode = Consumer.parseMode(scriptMode);
+        this.limit = limit;
         this.client = clusterMode ?
             RedisClientFactory.startClusterClient(this.runCallback) :
             RedisClientFactory.startClient(this.runCallback);
@@ -60,17 +62,19 @@ class Consumer {
         console.info(`Cardinality: ${cardResponse}`);
 
         const cutOffTime = Date.now() - settings.EXPIRATION_TIME_IN_MILLIS;
-        const ids = await this.client.zrangebyscore("latest-ids", cutOffTime, "+inf");
+        const ids = await this.limit > 0 ?
+            this.client.zrevrangebyscore("latest-ids", "+inf", cutOffTime, "limit", "0", this.limit) :
+            this.client.zrangebyscore("latest-ids", cutOffTime, "+inf");
 
-        // if (ids.length > 0) {
-        //     const batch = [];
-        //     for (const id of ids) {
-        //         batch.push(this.client.get(id));
-        //     }
-        //
-        //     const responses = await Promise.all(batch);
-        //     console.info(`Responses received: ${responses.length}`);
-        // }
+        if (ids.length > 0) {
+            const batch = [];
+            for (const id of ids) {
+                batch.push(this.client.get(id));
+            }
+
+            const responses = await Promise.all(batch);
+            console.info(`Responses received: ${responses.length}`);
+        }
     }
 
     static parseMode(cmd) {
@@ -90,6 +94,7 @@ const argv = minimist(process.argv.slice(2), {
     default: {
         scriptMode: settings.CONSUMER_MODE_PARAM_MANUAL,
         clusterMode: false,
+        limit: 0,
     },
     alias: {
         scriptMode: ["s", "script-mode"],
