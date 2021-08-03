@@ -70,9 +70,6 @@ class Consumer {
 
             const responses = await Promise.all(batch);
             console.info(`Responses received: ${responses.length}`);
-            for (const resp of responses) {
-                console.info(resp);
-            }
         }
     }
 
