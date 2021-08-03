@@ -62,15 +62,15 @@ class Consumer {
         const cutOffTime = Date.now() - settings.EXPIRATION_TIME_IN_MILLIS;
         const ids = await this.client.zrangebyscore("latest-ids", cutOffTime, "+inf");
 
-        if (ids.length > 0) {
-            const batch = [];
-            for (const id of ids) {
-                batch.push(this.client.get(id));
-            }
-
-            const responses = await Promise.all(batch);
-            console.info(`Responses received: ${responses.length}`);
-        }
+        // if (ids.length > 0) {
+        //     const batch = [];
+        //     for (const id of ids) {
+        //         batch.push(this.client.get(id));
+        //     }
+        //
+        //     const responses = await Promise.all(batch);
+        //     console.info(`Responses received: ${responses.length}`);
+        // }
     }
 
     static parseMode(cmd) {
