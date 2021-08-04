@@ -432,4 +432,31 @@ And 32% is exactly what we have with a single sorted set, meaning it doesn't mak
 
 In this test we see what happens when we change the number of shards while writers and readers are operating.
 
-TODO
+My first test was to kill shard number 3. ioredis did not do very well and was stopping due to ReplyError exceptions with the `MOVED` message. I don't know why, but ioredis was not following the redirection and just throwing.
+
+Anyway, these are the results with 300k items/sec being written by 8 producers, no readers:
+
+```
+shard | master CPU | replica CPU
+1     | 19         | 13
+2     | 37         | 24.5
+```
+
+Pretty comfortable with 300k items.
+
+Now back to the ioredis problem:
+
+```
+/home/lucio/redis-nodejs-test/node_modules/redis-parser/lib/parser.js:179
+    return new ReplyError(string)
+           ^
+
+ReplyError: MOVED 13664 10.91.16.155:6379
+    at parseError (/home/lucio/redis-nodejs-test/node_modules/redis-parser/lib/parser.js:179:12)
+    at parseType (/home/lucio/redis-nodejs-test/node_modules/redis-parser/lib/parser.js:302:14) {
+  command: {
+    name: 'setex',
+    args: [
+      'item:35',
+      ...
+```

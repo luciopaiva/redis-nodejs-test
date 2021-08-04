@@ -9,6 +9,7 @@ module.exports = class RedisClientFactory {
         const clientConfig = require(configFileName);
 
         clientConfig["enableAutoPipelining"] = true;
+        clientConfig["showFriendlyErrorStack"] = true;
 
         const client = new Redis(clientConfig);
         client.on("error", error => console.error(error));
@@ -27,6 +28,7 @@ module.exports = class RedisClientFactory {
             scaleReads: "slave",
             enableAutoPipelining: true,
             enableReadyCheck: true,
+            showFriendlyErrorStack: true,
         });
         client.on("error", error => console.error(error));
         client.on("connect", () => console.info("client> connected"));
