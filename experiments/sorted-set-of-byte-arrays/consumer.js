@@ -65,17 +65,18 @@ class Consumer {
         const ids = await (this.limit > 0 ?
             this.client.zrevrangebyscore("latest-ids", "+inf", cutOffTime, "limit", "0", this.limit) :
             this.client.zrangebyscore("latest-ids", cutOffTime, "+inf"));
-        console.info(ids);
+
+        let responses = [];
         if (ids.length > 0) {
             const batch = [];
             for (const id of ids) {
-                console.info(id);
                 batch.push(this.client.get(id));
             }
 
-            const responses = await Promise.all(batch);
-            console.info(`Responses received: ${responses.length}`);
+            responses = await Promise.all(batch);
         }
+
+        console.info(`Items received: ${ids.length} / responses received: ${responses.length}`);
     }
 
     static parseMode(cmd) {
