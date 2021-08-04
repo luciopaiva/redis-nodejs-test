@@ -11,9 +11,10 @@ class Consumer {
     scriptMode;
     limit;
 
-    constructor({scriptMode, clusterMode, limit}) {
+    constructor({scriptMode, clusterMode, limit, periodInMillis}) {
         this.scriptMode = Consumer.parseMode(scriptMode);
         this.limit = limit;
+        this.periodInMillis = periodInMillis;
         this.client = clusterMode ?
             RedisClientFactory.startClusterClient(this.runCallback) :
             RedisClientFactory.startClient(this.runCallback);
@@ -37,7 +38,7 @@ class Consumer {
         const elapsed = Math.round(performance.now() - startTime);
         console.info(`Batch processed (took ${elapsed} ms)`);
 
-        setTimeout(this.runCallback, settings.DEFAULT_CONSUMER_PERIOD_IN_MILLIS);
+        setTimeout(this.runCallback, this.periodInMillis);
     }
 
     async runSortedSetWithActualValue() {
@@ -94,11 +95,13 @@ class Consumer {
 
 const argv = minimist(process.argv.slice(2), {
     default: {
+        periodInMillis: settings.DEFAULT_CONSUMER_PERIOD_IN_MILLIS,
         scriptMode: settings.CONSUMER_MODE_PARAM_MANUAL,
         clusterMode: false,
         limit: 0,
     },
     alias: {
+        periodInMillis: ["p", "period-in-millis"],
         scriptMode: ["s", "script-mode"],
         clusterMode: ["cm", "cluster"],
     }
