@@ -384,4 +384,52 @@ Since the load was small, I decided to try more frequent fetches to simulate a h
 
 What role does the size fo the sorted set plays in the time it takes for producers to add items to it? What happens if we still send 300k items/sec, but items are now evenly split among 10 different sorted sets?
 
+Here are the results of 8 writers producing 300k items/sec with no readers. Before 20:25 we have the baseline code, saving all 300k to a single sorted set, and after that we have 10 sorted sets dividing that same load:
 
+```
+node --stack-size=2000 producer.js --cluster -q 300000 -t 8 -a 1 --ns 10 
+```
+
+![img_13.png](charts/img_13.png)
+
+![img_14.png](charts/img_14.png)
+
+![img_15.png](charts/img_15.png)
+
+If we take the average of master CPU usage across shards, before and after 20:25:
+
+```
+shard | CPU before | CPU after
+1     | 14         | 23
+2     | 33         | 22.5
+3     | 13.5       | 13.5
+```
+
+If we simply sum CPU usage before and after 20:25, we'll see that the sum stays practically the same (60.5% vs 59%). The good thing is that having more sorted sets helps to balance the load, since they will be fatally be hashed into different shards.
+
+Note: the third shard did not see a change in CPU usage because no sorted set was hashed into it.
+
+### Sharding all sets into the same slot
+
+Just to see what happens with the CPU when all sorted sets are hashed into the same shard, I added the `--same-slot` option:
+
+```
+node --stack-size=2000 producer.js --cluster -q 300000 -t 8 -a 1 --ns 10 --same-slot
+```
+
+This makes all sorted sets be named like `latest-ids:<number>{forced-slot}`, where the `{*}` suffix will make all of them fall into the same slot. With 3 shards, they are slotted into shard 1. The results are:
+
+```
+shard | master CPU | replica CPU
+1     | 32         | 20.5
+2     | 14         | 9.5
+3     | 13         | 9.5
+```
+
+And 32% is exactly what we have with a single sorted set, meaning it doesn't make much difference how many sets are you updating, but only the number of items involved (of course, keeping in mind that having multiple sets will help to balance the load when they are not forced into the same slot).
+
+## Online scaling of shards
+
+In this test we see what happens when we change the number of shards while writers and readers are operating.
+
+TODO
