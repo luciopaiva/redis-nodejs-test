@@ -27,10 +27,11 @@ class Producer {
     countWithHLL = false;
     storeIntoSet = false;
     numberOfSortedSets = 1;
+    allSetsIntoSameSlot = false;
 
     constructor({quantity, periodInMillis, chunkCount, agent, totalAgents, storeActualValue, shouldWriteUsingScript,
                     shouldWriteUsingSingleKeyScript, storeIntoList, countWithHLL, storeIntoSet, clusterMode,
-                    numberOfSortedSets}) {
+                    numberOfSortedSets, allSetsIntoSameSlot}) {
         if (agent < 1 || agent > totalAgents) {
             console.error("Error: agent must be greater than zero and not greater than totalAgents!");
             process.exit(1);
@@ -58,6 +59,7 @@ class Producer {
         this.countWithHLL = countWithHLL;
         this.storeIntoSet = storeIntoSet;
         this.numberOfSortedSets = numberOfSortedSets;
+        this.allSetsIntoSameSlot = allSetsIntoSameSlot;
 
         this.client = clusterMode ?
             RedisClientFactory.startClusterClient(this.runCallback) :
@@ -190,9 +192,11 @@ class Producer {
             batch.push(this.client.setex(key, settings.EXPIRATION_TIME_IN_SECONDS, this.itemValues.get(i)));
         }
 
+        const forceSlot = this.allSetsIntoSameSlot ? "{forced-slot}" : "";
+
         for (let i = 0; i < this.numberOfSortedSets; i++) {
             const sortedSetId = this.numberOfSortedSets > 1 ? "latest-ids:" + i : "latest-ids";
-            batch.push(this.client.zadd(sortedSetId, ...timestampsAndIdsBySortedSet[i]));
+            batch.push(this.client.zadd(sortedSetId + forceSlot, ...timestampsAndIdsBySortedSet[i]));
         }
     }
 
@@ -268,6 +272,8 @@ const argv = minimist(process.argv.slice(2), {
         clusterMode: false,
         // saves items to multiple sorted sets
         numberOfSortedSets: 1,
+        // if this is true, all sorted sets will be hashed into the same slot
+        allSetsIntoSameSlot: false,
     },
     alias: {
         quantity: ["q"],
@@ -283,6 +289,7 @@ const argv = minimist(process.argv.slice(2), {
         storeIntoSet: ["ss"],
         clusterMode: ["cm", "cluster"],
         numberOfSortedSets: ["ns", "number-of-sets"],
+        allSetsIntoSameSlot: ["same-slot"],
     }
 });
 
