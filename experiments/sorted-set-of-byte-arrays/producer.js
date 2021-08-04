@@ -26,9 +26,11 @@ class Producer {
     storeIntoList = false;
     countWithHLL = false;
     storeIntoSet = false;
+    numberOfSortedSets = 1;
 
     constructor({quantity, periodInMillis, chunkCount, agent, totalAgents, storeActualValue, shouldWriteUsingScript,
-                    shouldWriteUsingSingleKeyScript, storeIntoList, countWithHLL, storeIntoSet, clusterMode}) {
+                    shouldWriteUsingSingleKeyScript, storeIntoList, countWithHLL, storeIntoSet, clusterMode,
+                    numberOfSortedSets}) {
         if (agent < 1 || agent > totalAgents) {
             console.error("Error: agent must be greater than zero and not greater than totalAgents!");
             process.exit(1);
@@ -55,6 +57,7 @@ class Producer {
         this.storeIntoList = storeIntoList;
         this.countWithHLL = countWithHLL;
         this.storeIntoSet = storeIntoSet;
+        this.numberOfSortedSets = numberOfSortedSets;
 
         this.client = clusterMode ?
             RedisClientFactory.startClusterClient(this.runCallback) :
@@ -108,7 +111,7 @@ class Producer {
         } else if (this.storeActualValue) {
             this.updateKeysAndSortedSetWithActualValue(now, batch);
         } else {
-            this.updateKeysAndSortedSetWithRefToValue(now, batch);
+            this.updateKeysAndSortedSetsWithRefToValue(now, batch);
         }
 
         const processingTime = Math.round(performance.now() - processingStart);
@@ -172,20 +175,25 @@ class Producer {
         }
     }
 
-    updateKeysAndSortedSetWithRefToValue(now, batch) {
-        const timestampsAndIds = [];
+    updateKeysAndSortedSetsWithRefToValue(now, batch) {
+        const timestampsAndIdsBySortedSet = Array.from(Array(this.numberOfSortedSets), () => []);
 
         this.setAndUpdateChunk();
 
         for (let i = this.minId; i <= this.maxId; i++) {
             const key = this.itemKeys.get(i);
+            const sortedSetId = i % this.numberOfSortedSets;
 
-            timestampsAndIds.push(now);
-            timestampsAndIds.push(key);
+            timestampsAndIdsBySortedSet[sortedSetId].push(now);
+            timestampsAndIdsBySortedSet[sortedSetId].push(key);
 
             batch.push(this.client.setex(key, settings.EXPIRATION_TIME_IN_SECONDS, this.itemValues.get(i)));
         }
-        batch.push(this.client.zadd("latest-ids", ...timestampsAndIds));
+
+        for (let i = 0; i < this.numberOfSortedSets; i++) {
+            const sortedSetId = this.numberOfSortedSets > 1 ? "latest-ids:" + i : "latest-ids";
+            batch.push(this.client.zadd(sortedSetId, ...timestampsAndIdsBySortedSet[i]));
+        }
     }
 
     updateKeysAndSortedSetUsingScript(now, batch) {
@@ -258,6 +266,8 @@ const argv = minimist(process.argv.slice(2), {
         storeIntoSet: false,
         // enables the client to work in cluster mode
         clusterMode: false,
+        // saves items to multiple sorted sets
+        numberOfSortedSets: 1,
     },
     alias: {
         quantity: ["q"],
@@ -272,6 +282,7 @@ const argv = minimist(process.argv.slice(2), {
         countWithHLL: ["slh"],
         storeIntoSet: ["ss"],
         clusterMode: ["cm", "cluster"],
+        numberOfSortedSets: ["ns", "number-of-sets"],
     }
 });
 
