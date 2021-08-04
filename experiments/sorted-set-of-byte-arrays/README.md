@@ -221,18 +221,6 @@ r6g.large     | 8       | 10k                | 21.5       | 14
 
 Using Lua scripts here is definitely not the way to go.
 
-## Lua script vs manually running commands
-
-TODO
-
-On the reader side, is the Lua script more efficient for not requiring multiple network roundtrips? Considering the tests with the writer script, avoiding the script will be possibly better.
-
-## How consumers affect CPU
-
-How does adding consumers affect CPU? If they are reading from replicas, it shouldn't matter at all.
-
-TODO
-
 ## Sorted set vs lists
 
 Is using a list to get the latest K items significantly faster than using a sorted set?
@@ -333,3 +321,67 @@ replica 3 | 11
 ```
 
 I tried 500k, but the maximum limit each writer could handle was ~52k and I'd have to increase the number of writers to be able to go higher.
+
+## Consumers
+
+Here we add consumers to the 3-shard test. On the producer side we have 8 instances producing a total of 300k items/sec. Consumers (a total of 8 as well), on the other side, ask basically for 3 things (and do it exclusively on replicas):
+
+- `zcard` on `latest-ids`
+- `zrangebyscore` on `latest-ids` fetching all still-valid keys (which sums up to 300k)
+- a pipelined series of `get` commands for each one of the keys returned by the `zrangebyscore`
+
+Each consumer requests that data once every second.
+
+Let's see the results, starting with shard number 2, where the sorted set lives. At around 18h47, where the consumers are turned on, we can see a significant increase in the replicas CPU, where the reads are happening:
+
+![img_7.png](charts/img_7.png)
+
+Worth noting that master CPU does not change, confirming that consumers are reading exclusively from replicas.
+
+This is shard number 1:
+
+![img_8.png](charts/img_8.png)
+
+And finally shard number 3:
+
+![img_9.png](charts/img_9.png)
+
+On the consumer side, each batch was taking about 4.5 seconds to finish:
+
+```
+Cardinality: 300000
+Responses received: 300000
+Batch processed (took 4690 ms)
+```
+
+By disabling the `get` commands, we can verify that `zcard` + `zrangebyscore` correspond to less than 10% of that time:
+
+```
+Batch processed (took 317 ms)
+```
+
+Important to mention that this is possibly not a Redis bottleneck, but the Node.js package ioredis that is not doing a good job of deserializing what arrived from the network. Hard to tell without doing deeper tests.
+
+Fetching the whole live collection of 300k items all the time may not be wanted or realistic, so here I decided to test an application where we are interested only in the most recent 1000 items of the 300k. Instead of doing `zrangebyscore latest-ids cutOffTime +inf`, we are now doing `zrevrangebyscore latest-ids +inf cutOffTime limit 0 1000` to fetch at most 1k items, and those will always be the latest ones by score due to the `rev` in `zrevrangebyscore`.
+
+Here's how the consumer is called:
+
+    node consumer.js --cluster --limit 1000
+
+Again, there are 8 producers and 8 consumers. And here are the results of shards 1, 2 and 3 respectively:
+
+![img_10.png](charts/img_10.png)
+
+![img_11.png](charts/img_11.png)
+
+![img_12.png](charts/img_12.png)
+
+The writers start at around 18:03 and the readers at 18:12. As we can see, the replicas (shown by orange and green lines) are not visibly affected by the readers since the requested data is significantly smaller.
+
+Since the load was small, I decided to try more frequent fetches to simulate a higher number of consumers. First fetching once every 500ms (equivalent to 16 readers per sec), than once every 250ms (32 readers per sec). Still no visible changes if compared with having no readers.
+
+## 10 sorted sets of 30k items each
+
+What role does the size fo the sorted set plays in the time it takes for producers to add items to it? What happens if we still send 300k items/sec, but items are now evenly split among 10 different sorted sets?
+
+
