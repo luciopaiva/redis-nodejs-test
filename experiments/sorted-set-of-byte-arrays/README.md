@@ -15,11 +15,13 @@ What are the CPU costs involved and how does it scale with hundreds of thousands
 
 ## Increasing load
 
-Running an Elasticache Redis server with 1 cluster (1 master, 2 replicas). Each node is a `r6g.large` instance. `SORTED_SET_CONTAINS_ACTUAL_VALUE` is `false`.
+Here we are running an Elasticache Redis server with 1 cluster (1 master, 2 replicas). Each node is a `r6g.large` instance. `SORTED_SET_CONTAINS_ACTUAL_VALUE` is `false`, so we are keeping a sorted set of item ids and the items themselves are in their own separate keys.
 
-Running separate 4 writer instances, each producing 10k items per second (and no read load):
+Running 4 writer instances, each producing 10k items per second (and no read load):
 
 ![img.png](charts/img.png)
+
+Averages:
 
 ```
 master CPU: 11%
@@ -84,15 +86,26 @@ replicas CPU: 37%
 
 And here's the bottleneck again.
 
-My conclusion is that, although `r5.large` instances go a bit further, they quickly reach the bottleneck as well. For a load of hundreds of thousands of keys being updated simultaneously, it does not scale.
+My conclusion is that, although `r5.large` instances go a bit further, they quickly reach the bottleneck as well. For a load of hundreds of thousands of keys being updated simultaneously, it won't scale the same.
 
-## m6g instance
+## m6g instance and side-by-side comparison of all 3 types
 
-TODO
+Adding the `m6g.large` instance type, the test now involves a single shard, 8 writers producing a total of 200k items per second and no readers. The results:
+
+```
+EC2 type  | master CPU | replica CPU | vCPU | GB | Hourly rate | Monhtly rate
+r6g.large | 40         | 27          | 2    | 16 | $0.1008     | $72.58
+m6g.large | 40         | 26.5        | 2    | 8  | $0.0770     | $55.44
+r5.large  | 37         | 25          | 2    | 16 | $0.1260     | $90.72
+```
+
+Considering 8 GB is good enough, `m6g` types are a better option than `r6g` ones since they are considerably cheaper. 
+
+In the tests that follow, we will focus on comparing different Redis functionalities and not EC2 instances per se. Each test may use different instance types, but that is not a big deal since the tests are simply meant to compare features turned on/off and not how instances compare to each other.
 
 ## Same number of keys, more writers
 
-If we keep the same load w.r.t. the keys updated, but divide the production in larger number of writer instances, how does it impact CPU?
+If we keep the same load w.r.t. the keys updated, but divide the production by a larger number of writer instances, how does it impact CPU?
 
 ```
 Instance type | Writers | Items per sec each | master CPU | replica CPU
@@ -102,7 +115,7 @@ r5.large      | 8       | 37.5k              | 48*        | 35
 
 Here I am using `r5.large` instances. With 8 writers, the master CPU was very unstable and, although it kept at 48% for some time, it ended up rising to a bit above 50%, so things were not exactly great. It does show that increasing the number of concurrent writers seems to affect CPU. 
 
-Reducing the total number of keys a bit, from 300k to 240k, so we stay below the bottleneck:
+Now reducing the total number of keys a bit, from 300k to 240k, so we stay below the bottleneck and have more reliable results:
 
 ```
 Instance type | Writers | Items per sec each | master CPU | replica CPU
@@ -113,9 +126,9 @@ r5.large      | 8       | 30k                | 42         | 30
 
 ![img_3.png](charts/img_3.png)
 
-Strangely, I did not see an increase in the master CPU this time! I could not understand why was that so.
+Strangely, I did not see an increase in the master CPU this time! I could not understand why was that so and I suspect 42% was somehow at capacity already. I'd need to repeat these tests to understand better.
 
-I decided to switch back to the `r6g` and test with 200k keys:
+Here I decided to switch back to the `r6g` and test with 200k keys:
 
 ```
 Instance type | Writers | Items per writer per sec | master CPU | replica CPU
@@ -123,9 +136,7 @@ r6g.large     | 4       | 50k                      | 35         | 24
 r6g.large     | 8       | 25k                      | 45         | 30
 ```
 
-Here we do see a significant increase when we double the number of writers. It does suggest that sharding is a must-have for larger number of writers.
-
-Finally, a test with the `r6g.large` instance with 200k items where we can see that an increase in the number of writers is very significant:
+Now we do see a significant increase when we double the number of writers. It does suggest that sharding is a must-have for a larger number of writers.
 
 ## An additional sorted set
 
@@ -139,7 +150,7 @@ r6g.large     | 8       | 25k                      | 1           | 45         | 
 r6g.large     | 8       | 25k                      | 2           | 52         | 34
 ```
 
-The CPU clearly reached a bottleneck again - another indication that multi-sharding is needed. 
+The CPU clearly reached a bottleneck again - another indication that multi-sharding is needed as the application evolves and needs more structures. 
 
 ## Batch periodicity
 
@@ -156,16 +167,18 @@ Halving the send rate does not halve the CPU usage, but it's clearly a way to go
 
 ## Breaking batches in time
 
-What if the writer divides batches in chunks and sends them individually? Is it better to send 100 items in a single batch or 50 items twice as frequently?
+What if, instead of sending a big batch from time to time, the sender sends smaller chunks but more frequently, such that the effective rate does not change? For example, is it better to send 100 items every 1000ms or 50 items every 500ms?
+
+The results:
 
 ```
 Instance type | Writers | Items per writer per sec | Chunks | Interval ms | master CPU | replica CPU
 r6g.large     | 4       | 50k                      | 1      | 1000        | 35         | 24
-r6g.large     | 4       | 50k                      | 2      | 1000        | 36         | 24
-r6g.large     | 4       | 50k                      | 4      | 1000        | 36         | 24
+r6g.large     | 4       | 50k                      | 2      | 500         | 36         | 24
+r6g.large     | 4       | 50k                      | 4      | 250         | 36         | 24
 ```
 
-It seems that dividing in chunks in time does not have any effect.
+It seems that dividing in chunks in time does not have any effect on CPU (averaged every minute by CloudWatch), at least for 200k items/sec. Probably the instantaneous CPU is affected, but CloudWatch does not show averages smaller than 1 minute, so there's no easy way to tell.
 
 ## Sorted set containing reference vs actual value
 
@@ -173,10 +186,11 @@ By default, the producer writes both the item keys and updates the sorted set wi
 
 ```
 Instance type | Actual value? | Writers | Items per sec each | master CPU | replica CPU
-r6g.large     | Yes           | 6       | 50k                | 33         | 20
 r5.large      | Yes           | 6       | 50k                | 26         | 20
 r5.large      | No            | 6       | 50k                | 43         | 31 
 ```
+
+This test is a bit dumb, because of course CPU usage will drop as you no longer need to update several keys but only one. This is just basically showing the cost of running 200k `setex` per second. I'm going to keep it here just because it brings some extra info that could be useful for someone. The next test will add more useful information.
 
 ## Sending keys only once, but running them through a Lua script
 
@@ -184,7 +198,7 @@ The idea here is a variation in the test above (references vs actual values). In
 
 The tests here were run with the `--ws` flag to enable the Lua script for the writer.
 
-The first results:
+The first results, both with the flag enabled:
 
 ```
 Instance type | Writers | Chunks | Items per sec each | master CPU | replica CPU
@@ -192,7 +206,7 @@ r6g.large     | 4       | 1      | 2.5k               | 19         | 3.5
 r6g.large     | 4       | 1      | 5k                 | 48         | 4
 ```
 
-These first tests showed that running the Lua script is a very heavy operation. I tried the first test with each instance writing 50k, but the Elasticache Redis simply stopped responding for a couple of minutes! Not even `redis-cli --stat` clients were getting a response.
+These first tests showed that running the Lua script is a very heavy operation. I innocently tried running each instance writing 50k, but the Elasticache Redis simply stopped responding for a couple of minutes! Not even `redis-cli --stat` clients were getting a response.
 
 Trying 5k items per instance got me close to the bottleneck already. Then I tried splitting the load into two separate transmissions in the same 1-second window and there was an improvement:
 
@@ -230,14 +244,14 @@ These data structures are not directly interchangeable, but they can replace one
 Let's compare the baseline test (saving to individual keys + sorted set) to the list one (individual keys + list) by toggling on the `--sl` flag:
 
 ```
-Instance type | Writers | Items per sec each | master CPU | replica CPU
-r6g.large     | 8       | 25k                | 44.5       | 29
-r6g.large     | 8       | 25k                | 36         | 24
+Test       | Instance type | Writers | Items per sec each | master CPU | replica CPU
+Sorted set | r6g.large     | 8       | 25k                | 44.5       | 29
+List       | r6g.large     | 8       | 25k                | 36         | 24
 ```
 
-We can reduce the CPU to 80% of the baseline test.
+We can reduce the CPU to 80% of the sorted set test if we use a list instead.
 
-Now say that we also use the sorted set to count active elements. For instance, the unique items that were posted in the last X seconds. The list doesn't provide an easy way to count the unique items.
+Now say that we also use the sorted set to count active elements. For instance, the unique items that were posted in the last X seconds. The list doesn't provide an easy way to count the unique items. `LLEN` will not give you the count you want if your items are regularly updated and added to the list. With a sorted set, counting uniques would be easy, but with a list we need something else.
 
 One idea is to use a HyperLogLog structure for that. Creating a new HLL every minute, we can use the one from the previous minute to have an estimate on the count. It won't be an exact count because 1) HLLs provide only an approximation and 2) the count is delayed a whole minute since we need to accumulate the data before using it.
 
@@ -250,11 +264,11 @@ Instance type | Writers | Items per sec each | master CPU | replica CPU
 r6g.large     | 8       | 25k                | 30.5       | 18.5
 ```
 
-In the chart above, the HLL is turned (`--sl --slh`) on at 14:36 and off at 14:49. The periods before and after that in chart show a test running with only `--slh`. Strangely, turning on the HLL count brought the CPU usage *down* - although more work is being performed! Also strange, CPU usage is not constant for some reason (differently from all other tests seen so far).
+In the chart above, the HLL is turned (`--sl --slh`) on at 14:36 and off at 14:49. The periods before and after that in the chart show a test running with only `--slh`. Strangely, turning on the HLL count brought the CPU usage *down* - although more work is being performed! Also strange, CPU usage is not constant for some reason (differently from all other tests seen so far). I'd have to repeat this test to investigate more, but the main thing learned here is that sorted sets are a bit more expensive and you may need to reconsider using them when having many entries - and lists may be a viable alternative.
 
 ## Sorted sets vs sets
 
-We could also replace the sorted set with a set of sets, i.e., one set being created every minute to hold the latest items. It would both give the latest items and the count.
+We could also replace the sorted set with a set, similarly to the list idea above - one set being created every minute to hold the latest items. It would both give the latest items and the count of uniques.
 
 The test results are very similar to the ones with the HLL above, including the inconstant CPU usage:
 
@@ -265,13 +279,17 @@ r6g.large     | 8       | 25k                | 31.5       | 18.5
 
 ![img_6.png](charts/img_6.png)
 
-To the left of the red bar, the HLL test; to the right, the set test.
+To the left of the red bar, the list+HLL test; to the right, the set test.
+
+It seems that sets would be easier to use, since an extra structure (the HLL) is not needed to count uniques.
+
+The drawback of both the list and the set approach is that counting uniques imposes a delay until you accumulate the data. At 10:01:59, your latest unique count will be the one that was counted between 10:00:00 and 10:00:59 - i.e., your count may be 1 minute late if you keep 1-minute lists/sets. With the sorted set, however, you can always respond with a fresh count.
 
 ## Multiple shards
 
-In this test we add multiple shards to be able to scale the writer load. Changing the producer code to deal with multiple shards was relatively simple (basically just a matter of replacing `new Redis` with `new Redis.Cluster`), but I was manually pipelining commands using `client.pipeline()` and this doesn't work with multiple shards since each node must have its own pipeline. `ioredis` could internally split commands into separate pipelines, but it doesn't do it for the `pipeline()` method. Thankfully, it does create individual pipelines if you toggle on the option `enableAutoPipelining`, so I changed the code to use it.
+In this test we add multiple shards to see how the writer load scales. Changing the producer code to deal with multiple shards was relatively simple (basically just a matter of replacing `new Redis()` with `new Redis.Cluster()`), but I was manually pipelining commands using `client.pipeline()` and this doesn't work with multiple shards since each node must have its own pipeline. `ioredis` could internally split commands into separate pipelines, but it doesn't do it for the `pipeline()` method. Thankfully, it does create individual pipelines if you toggle on the option `enableAutoPipelining`, so I changed the code to use it. Auto-pipelining groups commands on every Node.js event loop tick, which is a clever mechanism and perfectly fine for my pipeline requirements.
 
-Now for the results. My test cluster had 3 shards, each with 1 master and 2 replicas. This is the baseline result for the single-shard test with 8 writers, 25k items/s each:
+Now for the results. My test cluster had 3 shards, each with 1 master and 2 replicas each. This is the baseline result for the single-shard test with 8 writers, 25k items/s each:
 
 ```
 Instance type | Writers | Items per writer per sec | master CPU | replica CPU
@@ -290,7 +308,7 @@ replica 2 | 16
 replica 3 | 8
 ```
 
-Considerably lower, definitely scaled well. The shard #2 had higher CPU usage due to the fact that it stores the sorted set slot and, as we've seen in other tests, sorted sets use a lot of CPU.
+CPUs are considerably lower since the load was spread across the shards - definitely scaled well. Shard #2 had higher CPU usage due to the fact that it stored the sorted set slot and, as we've seen in other tests, sorted sets use a lot of CPU.
 
 Now we are finally able to scale to 300k items per second, number we couldn't achieve in single-shard mode. To run 37.5k items/sec per writer, I had to increase Node.js' stack size. That's how I ran it:
 
@@ -320,7 +338,7 @@ replica 2 | 24
 replica 3 | 11
 ```
 
-I tried 500k, but the maximum limit each writer could handle was ~52k and I'd have to increase the number of writers to be able to go higher.
+I tried 500k, but the maximum limit each writer could handle was ~52k (the writer must be able to send all commands within a 1-second time frame to be able to keep the intended rate - but the ioredis client could not keep up with it), so I'd have to increase the number of writers to be able to go higher.
 
 ## Consumers
 
@@ -434,7 +452,7 @@ In this test we see what happens when we change the number of shards while write
 
 My first test was to kill shard number 3. ioredis did not do very well and was stopping due to ReplyError exceptions with the `MOVED` message. I don't know why, but ioredis was not following the redirection and just throwing.
 
-Anyway, these are the results with 300k items/sec being written by 8 producers, no readers:
+Anyway, these are the results running 2 shards with 300k items/sec being written by 8 producers, no readers:
 
 ```
 shard | master CPU | replica CPU
@@ -460,3 +478,5 @@ ReplyError: MOVED 13664 10.91.16.155:6379
       'item:35',
       ...
 ```
+
+TODO
